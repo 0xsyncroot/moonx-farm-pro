@@ -24,7 +24,22 @@ interface AppInitializerProps {
  * - Seamless transition to real content when ready
  */
 export const AppInitializer: React.FC<AppInitializerProps> = ({ children }) => {
-  const { isInitialized, networksLoaded } = useAppInitialization();
+  const { 
+    isInitialized, 
+    networksLoaded, 
+    isWalletAutoConnecting, 
+    isWalletAutoConnected, 
+    walletAutoConnectError 
+  } = useAppInitialization();
+
+  // Log wallet auto-connect status for debugging
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    if (isWalletAutoConnected) {
+      console.log('✅ Wallet auto-connected successfully');
+    } else if (walletAutoConnectError) {
+      console.warn('⚠️ Wallet auto-connect failed:', walletAutoConnectError);
+    }
+  }
 
   // Show layout shimmer while networks are loading
   if (!networksLoaded) {

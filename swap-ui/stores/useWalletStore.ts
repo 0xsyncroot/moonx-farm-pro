@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import type { EncryptedWallet } from '@/types/api';
 
@@ -37,44 +37,62 @@ const initialState: WalletState = {
 
 export const useWalletStore = create<WalletStore>()(
   devtools(
-    (set, get) => ({
-      ...initialState,
+    persist(
+      (set, get) => ({
+        ...initialState,
 
-      // Basic setters
-      setWalletAddress: (walletAddress) => set({ walletAddress }),
-      setSavedWallets: (savedWallets) => set({ savedWallets }),
-      setActiveWallet: (activeWallet) => set({ activeWallet }),
-      setPasskeySupported: (passkeySupported) => set({ passkeySupported }),
+        // Basic setters
+        setWalletAddress: (walletAddress) => set({ walletAddress }),
+        setSavedWallets: (savedWallets) => set({ savedWallets }),
+        setActiveWallet: (activeWallet) => set({ activeWallet }),
+        setPasskeySupported: (passkeySupported) => set({ passkeySupported }),
 
-      // Add wallet (prevents duplicates)
-      addWallet: (wallet) => {
-        const { savedWallets } = get();
-        const updatedWallets = savedWallets.filter(w => w.address !== wallet.address);
-        updatedWallets.push(wallet);
-        set({ savedWallets: updatedWallets });
-      },
+        // Add wallet (prevents duplicates)
+        addWallet: (wallet) => {
+          const { savedWallets } = get();
+          const updatedWallets = savedWallets.filter(w => w.address !== wallet.address);
+          updatedWallets.push(wallet);
+          set({ savedWallets: updatedWallets });
+        },
 
-      // Remove wallet
-      removeWallet: (address) => {
-        const { savedWallets, activeWallet } = get();
-        const updatedWallets = savedWallets.filter(w => w.address !== address);
-        set({ 
-          savedWallets: updatedWallets,
-          // Clear active wallet if it was removed
-          activeWallet: activeWallet?.address === address ? null : activeWallet
-        });
-      },
+        // Remove wallet
+        removeWallet: (address) => {
+          const { savedWallets, activeWallet } = get();
+          const updatedWallets = savedWallets.filter(w => w.address !== address);
+          set({ 
+            savedWallets: updatedWallets,
+            // Clear active wallet if it was removed
+            activeWallet: activeWallet?.address === address ? null : activeWallet
+          });
+        },
 
-      // Clear all wallet data (for logout)
-      clearWalletData: () => set({
-        walletAddress: null,
-        activeWallet: null,
-        // Keep savedWallets and passkeySupported as they persist
+        // Clear all wallet data (for logout)
+        clearWalletData: () => set({
+          walletAddress: null,
+          activeWallet: null,
+          // Keep savedWallets and passkeySupported as they persist
+        }),
+
+        // Reset all state
+        resetWalletState: () => set(initialState),
       }),
-
-      // Reset all state
-      resetWalletState: () => set(initialState),
-    }),
+      {
+        name: 'moonx-wallet-store',
+        // Only persist non-sensitive data
+        partialize: (state) => ({
+          // Don't persist walletAddress for security (will be restored from activeWallet)
+          savedWallets: state.savedWallets,
+          activeWallet: state.activeWallet,
+          passkeySupported: state.passkeySupported,
+        }),
+        // Restore walletAddress from activeWallet after hydration
+        onRehydrateStorage: () => (state) => {
+          if (state?.activeWallet?.address && !state.walletAddress) {
+            state.walletAddress = state.activeWallet.address;
+          }
+        },
+      }
+    ),
     { name: 'wallet-store' }
   )
 );

@@ -1,5 +1,5 @@
-import { Network, TokenBalance, SwapQuote } from '@/lib/api';
 import { EncryptedWallet } from '@/lib/crypto';
+import type { Network, TokenBalance, SwapQuote } from '@/types/api';
 
 // Re-export API types
 export type {
@@ -7,7 +7,7 @@ export type {
   Token,
   TokenBalance,
   SwapQuote
-} from '@/lib/api';
+} from '@/types/api';
 
 // Re-export crypto types
 export type {

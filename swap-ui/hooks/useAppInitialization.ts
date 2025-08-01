@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useNetworkState } from '@/stores';
+import { useWalletAutoConnect } from './useWalletAutoConnect';
 
 /**
  * App Initialization Hook
@@ -11,6 +12,7 @@ import { useNetworkState } from '@/stores';
  * Responsibilities:
  * - Load critical app data when app starts
  * - Initialize network data for Header and other components
+ * - Auto-reconnect private wallets with valid sessions
  * - Ensure proper data flow according to Clean Architecture
  * 
  * Usage:
@@ -19,6 +21,7 @@ import { useNetworkState } from '@/stores';
  */
 export const useAppInitialization = () => {
   const { networks, loadNetworks } = useNetworkState();
+  const { isChecking: isWalletAutoConnecting, isAutoConnected, error: walletAutoConnectError } = useWalletAutoConnect();
   const hasInitialized = useRef(false);
   const isLoading = useRef(false);
 
@@ -50,6 +53,10 @@ export const useAppInitialization = () => {
     isInitialized: hasInitialized.current,
     networksLoaded: networks.length > 0,
     isLoading: isLoading.current,
+    // Wallet auto-connect states
+    isWalletAutoConnecting,
+    isWalletAutoConnected: isAutoConnected,
+    walletAutoConnectError,
   };
 };
 

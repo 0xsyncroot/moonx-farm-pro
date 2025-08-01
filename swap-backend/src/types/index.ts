@@ -4,6 +4,8 @@ export interface Network {
   rpc: string;
   currency: string;
   multicall3Address: string;
+  logoUrl: string;
+  explorer: string;
 }
 
 export interface Token {

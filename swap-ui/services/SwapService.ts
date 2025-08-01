@@ -251,7 +251,7 @@ export class SwapService {
       const tx = await this.executeTransactionWithRetry(signer, swapTxParams, 'swap');
 
       console.log(`⏳ Transaction sent: ${tx.hash}`);
-      const receipt = await tx.wait();
+      const receipt = await tx.wait(1);
 
       if (!receipt) {
         throw new Error('Transaction receipt not received');

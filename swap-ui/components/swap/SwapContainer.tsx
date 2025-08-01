@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ArrowDownUp, Settings, Zap, Clock, TrendingUp, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowDownUp, Settings, Zap, Clock, TrendingUp, RefreshCw, RotateCcw } from 'lucide-react';
 import { Button, Input, TokenInput, TokenAmountDisplay, ErrorCard, useToast } from '@/components/ui';
 import TokenSelector from './TokenSelector';
 import SlippageModal from './SlippageModal';
 import { useSwap } from '@/hooks/useSwap';
-import { useUIState, useWalletState } from '@/stores';
+import { useUIState, useWalletState, useNetworkState, useTokenState } from '@/stores';
+import { buildTransactionUrl } from '@/utils';
 
 const SwapContainer: React.FC = () => {
   const {
@@ -30,8 +31,12 @@ const SwapContainer: React.FC = () => {
 
   const { loading, error, clearError, openWalletModal, swapExecution, setSwapPending, setSwapCompleted, resetSwapExecution } = useUIState();
   const { isConnected, walletAddress } = useWalletState();
+  const { selectedNetwork } = useNetworkState();
+  const { refreshSpecificTokens } = useTokenState();
   const [showSlippageModal, setShowSlippageModal] = useState(false);
   const [quoteCountdown, setQuoteCountdown] = useState(0);
+  const [isRefreshingToken, setIsRefreshingToken] = useState(false);
+  const tokenRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const toast = useToast();
 
   // Dynamic balance lookup - get latest balance from tokens array
@@ -49,6 +54,39 @@ const SwapContainer: React.FC = () => {
   const fromTokenBalance = getLatestBalance(swapForm.fromToken);
   const toTokenBalance = getLatestBalance(swapForm.toToken);
 
+  // Helper function to refresh selected tokens
+  const refreshSelectedTokens = async (showLoading = false) => {
+    if (!selectedNetwork || !walletAddress || !isConnected) return;
+    
+    const tokenAddresses: string[] = [];
+    if (swapForm.fromToken) tokenAddresses.push(swapForm.fromToken.token.address);
+    if (swapForm.toToken) tokenAddresses.push(swapForm.toToken.token.address);
+    
+    if (tokenAddresses.length === 0) return;
+
+    try {
+      if (showLoading) setIsRefreshingToken(true);
+      
+      await refreshSpecificTokens({
+        tokenAddresses,
+        userAddress: walletAddress,
+        chainId: selectedNetwork.chainId,
+      });
+    } catch (error) {
+      // Silent fail for auto-refresh, only show error for manual refresh
+      if (showLoading) {
+        toast.error('Failed to refresh token balance', 'Please try again');
+      }
+    } finally {
+      if (showLoading) setIsRefreshingToken(false);
+    }
+  };
+
+  // Manual refresh function for UI button
+  const handleManualRefresh = () => {
+    refreshSelectedTokens(true);
+  };
+
   // Auto-get quote when form inputs change (not when quote is manually cleared)
   useEffect(() => {
     if (swapForm.fromToken && swapForm.toToken && swapForm.fromAmount && !loading.isLoading && !hasValidQuote) {
@@ -59,6 +97,34 @@ const SwapContainer: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [swapForm.fromToken, swapForm.toToken, swapForm.fromAmount, loading.isLoading, hasValidQuote, getSwapQuote]); // Include all used values
+
+  // Auto-refresh selected token balances every 30 seconds
+  useEffect(() => {
+    // Clear existing interval
+    if (tokenRefreshIntervalRef.current) {
+      clearInterval(tokenRefreshIntervalRef.current);
+      tokenRefreshIntervalRef.current = null;
+    }
+
+    // Only start interval if user has selected tokens and is connected
+    if (isConnected && walletAddress && selectedNetwork && (swapForm.fromToken || swapForm.toToken)) {
+      // Initial refresh
+      refreshSelectedTokens(false);
+      
+      // Set up 30-second interval
+      tokenRefreshIntervalRef.current = setInterval(() => {
+        refreshSelectedTokens(false);
+      }, 30000); // 30 seconds
+    }
+
+    // Cleanup on unmount or dependency change
+    return () => {
+      if (tokenRefreshIntervalRef.current) {
+        clearInterval(tokenRefreshIntervalRef.current);
+        tokenRefreshIntervalRef.current = null;
+      }
+    };
+  }, [isConnected, walletAddress, selectedNetwork, swapForm.fromToken, swapForm.toToken]); // Only depend on essential values
 
   // Quote countdown timer - 30 seconds (pause when swap is pending)
   useEffect(() => {
@@ -106,17 +172,33 @@ const SwapContainer: React.FC = () => {
       const result = await executeSwapTransaction();
       
       if (result && typeof result === 'string') {
-        toast.success(
-          'Swap Completed!', 
-          `Successfully swapped ${swapForm.fromToken?.token.symbol} → ${swapForm.toToken?.token.symbol}`
-        );
+        // Transaction successful - show success with explorer link
+        const explorerUrl = selectedNetwork ? buildTransactionUrl(selectedNetwork, result) : null;
+        
+        toast.showToast('success', 'Swap Completed!', {
+          message: `Successfully swapped ${swapForm.fromToken?.token.symbol} → ${swapForm.toToken?.token.symbol}`,
+          action: explorerUrl ? {
+            label: 'View Transaction',
+            onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+          } : undefined
+        });
         // Clear quote on successful swap
         clearQuote();
       } else {
         toast.error('Swap Failed', 'Transaction was not completed');
       }
-    } catch (error) {
-      toast.error('Swap Failed', 'An unexpected error occurred during the swap');
+    } catch (error: any) {
+      // Check if error contains transaction hash (failed transaction but still submitted)
+      const txHash = error?.transactionHash || error?.hash;
+      const explorerUrl = selectedNetwork && txHash ? buildTransactionUrl(selectedNetwork, txHash) : null;
+      
+      toast.showToast('error', 'Swap Failed', {
+        message: 'An unexpected error occurred during the swap',
+        action: explorerUrl ? {
+          label: 'View Transaction',
+          onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+        } : undefined
+      });
     } finally {
       // Always unlock swap state when completed (success or fail)
       setSwapCompleted();
@@ -171,8 +253,21 @@ const SwapContainer: React.FC = () => {
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <label className="text-xs sm:text-sm font-medium text-gray-300">You pay</label>
-            <div className="text-[10px] sm:text-xs text-gray-400">
-              Balance: <span className="text-white font-medium">{fromTokenBalance}</span>
+            <div className="flex items-center space-x-1.5">
+              <div className="text-[10px] sm:text-xs text-gray-400">
+                Balance: <span className="text-white font-medium">{fromTokenBalance}</span>
+              </div>
+              {/* Manual Refresh Button */}
+              {swapForm.fromToken && isConnected && (
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshingToken}
+                  className="p-1 text-gray-400 hover:text-white hover:bg-gray-700/50 rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Refresh token balance"
+                >
+                  <RotateCcw className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${isRefreshingToken ? 'animate-spin' : ''}`} />
+                </button>
+              )}
             </div>
           </div>
           

@@ -18,9 +18,15 @@ export class SwapController {
   // Get supported networks
   async getNetworks(request: FastifyRequest, reply: FastifyReply) {
     try {
+      // Remove RPC information from networks before sending to client
+      const networks = Object.values(NETWORKS).map(network => {
+        const { rpc, ...networkWithoutRpc } = network;
+        return networkWithoutRpc;
+      });
+
       return reply.send({ 
         success: true, 
-        data: { networks: Object.values(NETWORKS) } 
+        data: { networks } 
       });
     } catch (error) {
       console.error('Error in getNetworks:', error);

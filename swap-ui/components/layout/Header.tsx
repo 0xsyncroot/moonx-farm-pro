@@ -191,11 +191,30 @@ const Header: React.FC = () => {
               <div className="flex items-center space-x-2 px-3 py-2 bg-gray-800/60 border border-gray-700 rounded-xl hover:bg-gray-800/80 hover:border-gray-600 transition-all cursor-pointer group">
                 <div className="w-5 h-5 rounded-full overflow-hidden">
                   {selectedNetwork ? (
-                    <div className="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">
-                        {selectedNetwork.name.charAt(0)}
-                      </span>
-                    </div>
+                    selectedNetwork.logoUrl ? (
+                      <Image
+                        src={selectedNetwork.logoUrl}
+                        alt={`${selectedNetwork.name} logo`}
+                        width={20}
+                        height={20}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to initials if image fails to load
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement;
+                          if (parent) {
+                            parent.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center"><span class="text-white text-xs font-bold">${selectedNetwork.name.charAt(0)}</span></div>`;
+                          }
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">
+                          {selectedNetwork.name.charAt(0)}
+                        </span>
+                      </div>
+                    )
                   ) : (
                     <div className="w-full h-full bg-gray-600 rounded-full animate-pulse"></div>
                   )}

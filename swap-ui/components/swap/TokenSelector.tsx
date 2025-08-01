@@ -206,15 +206,13 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
     }
   }, [storeTokens, searchTerm, isSearching]);
 
-  // Load tokens when modal is opened for the first time
+  // Load tokens when modal is opened - always refresh to get latest balances
   const handleModalOpen = async () => {
     setIsOpen(true);
     
-    // Always reload if we have wallet but no tokens with balance, or haven't loaded yet
-    const hasTokensWithBalance = storeTokens.some(t => parseFloat(t.formattedBalance) > 0);
-    const shouldReload = !hasLoadedTokens || (walletAddress && !hasTokensWithBalance);
-    
-    if (shouldReload && selectedNetwork) {
+    // Always reload tokens when modal opens to get fresh balance data
+    // This ensures users see the most up-to-date token balances
+    if (selectedNetwork) {
       setIsInitialLoading(true);
       try {
         await loadTokens({
@@ -224,6 +222,8 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
         setHasLoadedTokens(true);
       } catch (error) {
         console.error('❌ TokenSelector: Failed to load tokens:', error);
+        // On error, still mark as loaded to prevent infinite loading loops
+        setHasLoadedTokens(true);
       } finally {
         setIsInitialLoading(false);
       }

@@ -3,9 +3,11 @@
 export interface Network {
   name: string;
   chainId: number; // Base network chainId: 8453
-  rpc: string;
+  rpc?: string; // Optional - not included in API response for security
   currency: string;
   multicall3Address: string;
+  logoUrl: string;
+  explorer: string;
 }
 
 export interface Token {

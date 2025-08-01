@@ -28,6 +28,8 @@ export const NETWORKS: Record<string, Network> = {
     chainId: 8453,
     rpc: process.env.BASE_RPC_URL || 'https://mainnet.base.org',
     currency: 'ETH',
+    logoUrl: 'https://raw.githubusercontent.com/base/brand-kit/refs/heads/main/logo/TheSquare/Digital/Base_square_blue.png',
+    explorer: 'https://basescan.org',
     multicall3Address: '0xcA11bde05977b3631167028862bE2a173976CA11'
   }
   // Sẵn sàng thêm networks khác:

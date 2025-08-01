@@ -11,7 +11,7 @@ import { tokenService } from '@/services';
 import type { TokenBalance } from '@/types/api';
 
 export const useSwap = () => {
-  const { selectedNetwork, loadNetworks } = useNetworkState();
+  const { selectedNetwork, rpcSettings, loadNetworks } = useNetworkState();
   const { tokens, loadTokens, refreshSpecificTokens, setDefaultTokens } = useTokenState();
   const { gasSettings } = useUIState();
   const {
@@ -300,13 +300,23 @@ export const useSwap = () => {
     }
 
     // Create proper wallet config based on actual wallet type
-    const rpcSettings = { baseRpcUrl: selectedNetwork.rpc, useCustomRpc: false };
+    // Use RPC settings from store - either custom RPC or default Base RPC
+    const effectiveRpcUrl = rpcSettings.useCustomRpc && rpcSettings.customRpcUrl 
+      ? rpcSettings.customRpcUrl 
+      : rpcSettings.baseRpcUrl;
+    
+    const effectiveRpcSettings = { 
+      baseRpcUrl: effectiveRpcUrl, 
+      useCustomRpc: rpcSettings.useCustomRpc,
+      customRpcUrl: rpcSettings.customRpcUrl
+    };
+    
     const currentWalletType = getWalletType();
     const walletType = (currentWalletType === 'privy' || currentWalletType === 'private') 
       ? currentWalletType 
       : 'privy'; // Default to privy for backward compatibility
     
-    const walletConfig = createWalletConfig(rpcSettings, walletType, selectedNetwork.chainId);
+    const walletConfig = createWalletConfig(effectiveRpcSettings, walletType, selectedNetwork.chainId);
 
     const result = await executeSwap({
       quote,
@@ -315,7 +325,7 @@ export const useSwap = () => {
       fromAmount: swapForm.fromAmount,
       slippage: swapForm.slippage,
       userAddress: walletAddress,
-      rpcSettings,
+      rpcSettings: effectiveRpcSettings,
       walletConfig,
       getWalletType,
       gasSettings, // Add gas settings to swap execution
