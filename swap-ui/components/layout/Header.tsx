@@ -2,9 +2,10 @@
 
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
-import { Wallet, ChevronDown, Settings, LogOut, Copy, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import { Button, SettingsModal } from '@/components/ui';
+import { Wallet, ChevronDown, Settings, LogOut, Copy, Eye, EyeOff, AlertTriangle, BookOpen } from 'lucide-react';
+import { Button, SettingsModal, useToast } from '@/components/ui';
 import { useWalletState, useUIState, useNetworkState } from '@/stores';
+import { useTutorialActions } from '@/stores/useUIStore';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallet } from '@/hooks/useWallet';
 
@@ -12,8 +13,10 @@ const Header: React.FC = () => {
   const { walletAddress, isConnected, setWalletAddress } = useWalletState();
   const { openWalletModal } = useUIState();
   const { selectedNetwork, networks, walletConfig, setWalletConfig } = useNetworkState();
+  const { startTutorial, setFirstTimeUser } = useTutorialActions();
   const { logout: privyLogout } = usePrivy();
   const { getPrivateKey, disconnectWallet, clearAllWalletDataCompletely } = useWallet();
+  const toast = useToast();
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showWalletDropdown, setShowWalletDropdown] = useState(false);
@@ -55,8 +58,14 @@ const Header: React.FC = () => {
 
   const copyAddress = async () => {
     if (walletAddress) {
-      await navigator.clipboard.writeText(walletAddress);
-      // Could add toast notification here
+      try {
+        await navigator.clipboard.writeText(walletAddress);
+        toast.success('Address Copied!', `${formatAddress(walletAddress)} copied to clipboard`);
+        setShowWalletDropdown(false); // Close dropdown after copying
+      } catch (error) {
+        console.error('Failed to copy address:', error);
+        toast.error('Copy Failed', 'Could not copy address to clipboard');
+      }
     }
   };
 
@@ -71,6 +80,7 @@ const Header: React.FC = () => {
         // 🔒 SECURE: Complete cleanup for private key wallets
         // This removes ONLY the active wallet connection but keeps saved wallets
         disconnectWallet();
+        toast.success('Wallet Disconnected!', 'Private key wallet disconnected successfully');
       } else {
         // 🔒 SECURE: Complete cleanup for Privy wallets
         try {
@@ -90,14 +100,19 @@ const Header: React.FC = () => {
         
         // Clear any remaining local data (sessions, etc.)
         disconnectWallet();
+        toast.success('Wallet Disconnected!', 'Privy wallet disconnected successfully');
       }
     } catch (error) {
       console.error('Error during disconnect:', error);
+      toast.error('Disconnect Failed', 'Error occurred during disconnect. Trying fallback...');
+      
       // Force clear all data if there's an error
       try {
         disconnectWallet();
+        toast.success('Wallet Disconnected!', 'Wallet disconnected using fallback method');
       } catch (fallbackError) {
         console.error('Fallback disconnect also failed:', fallbackError);
+        toast.error('Disconnect Failed', 'Could not disconnect wallet. Please refresh the page.');
       }
     }
     
@@ -116,6 +131,7 @@ const Header: React.FC = () => {
   const authenticateAndShowPrivateKey = async () => {
     if (walletConfig.walletType !== 'private') {
       setAuthError('Private key not available for this wallet type');
+      toast.error('Authentication Failed', 'Private key not available for this wallet type');
       return;
     }
 
@@ -127,11 +143,14 @@ const Header: React.FC = () => {
       if (privateKey) {
         setCurrentPrivateKey(privateKey);
         setShowPrivateKey(true);
+        toast.success('Authentication Successful!', 'Private key retrieved securely');
       } else {
         setAuthError('Failed to authenticate. Please try again.');
+        toast.error('Authentication Failed', 'Could not retrieve private key');
       }
     } catch (error) {
       setAuthError('Authentication failed. Please try again.');
+      toast.error('Authentication Failed', 'Biometric authentication failed');
     } finally {
       setIsAuthenticating(false);
     }
@@ -144,6 +163,17 @@ const Header: React.FC = () => {
     setCurrentPrivateKey(null);
     setAuthError(null);
     setIsAuthenticating(false);
+  };
+
+  // Restart tutorial
+  const handleRestartTutorial = () => {
+    // Clear tutorial completion and progress flags
+    localStorage.removeItem('moonx-tutorial-completed');
+    localStorage.removeItem('moonx-tutorial-progress');
+    setFirstTimeUser(true);
+    startTutorial();
+    setShowSettingsModal(false);
+    toast.success('Tutorial Restarted!', 'The guided tour will begin shortly');
   };
 
   const tabs = [
@@ -161,8 +191,14 @@ const Header: React.FC = () => {
             <div className="flex items-center space-x-8">
               {/* Logo */}
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center shadow-lg">
-                  <span className="text-white font-bold text-sm">M</span>
+                <div className="w-8 h-8 rounded-lg overflow-hidden shadow-lg">
+                  <Image
+                    src="/icons/logo.png"
+                    alt="MoonX Logo"
+                    width={32}
+                    height={32}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <span className="text-xl font-bold text-white">MoonX</span>
               </div>
@@ -239,16 +275,17 @@ const Header: React.FC = () => {
                   <div className="relative" ref={dropdownRef}>
                     <button
                       onClick={() => setShowWalletDropdown(!showWalletDropdown)}
-                      className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl border border-orange-500/20"
+                      className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl border border-orange-500/20"
                     >
                       <div className="w-5 h-5 bg-white/20 rounded-full flex items-center justify-center">
                         <Wallet className="w-3 h-3 text-white" />
                       </div>
-                      <div className="hidden sm:flex flex-col items-start">
+                      <div className="hidden sm:flex items-center">
                         <span className="text-white font-medium text-sm">
                           {walletAddress ? formatAddress(walletAddress) : 'No Address'}
                         </span>
-                        <span className="text-orange-200 text-xs">
+                        <span className="text-orange-200/60 mx-1.5">•</span>
+                        <span className="text-orange-200 text-xs font-medium">
                           {getWalletType()}
                         </span>
                       </div>
@@ -311,11 +348,12 @@ const Header: React.FC = () => {
                 <Button
                   onClick={() => openWalletModal('connect')}
                   variant="primary"
-                  size="md"
-                  className="shadow-lg hover:shadow-xl"
+                  size="sm"
+                  className="shadow-lg hover:shadow-xl sm:px-4 sm:py-2.5 sm:text-base"
                 >
-                  <Wallet className="w-4 h-4 mr-2" />
-                  Connect Wallet
+                  <Wallet className="w-4 h-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Connect Wallet</span>
+                  <span className="sm:hidden">Connect</span>
                 </Button>
               )}
             </div>
@@ -324,9 +362,10 @@ const Header: React.FC = () => {
       </header>
 
       {/* Settings Modal */}
-      <SettingsModal 
-        isOpen={showSettingsModal} 
-        onClose={() => setShowSettingsModal(false)} 
+            <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        onRestartTutorial={handleRestartTutorial}
       />
 
       {/* Disconnect Confirmation Modal */}
@@ -377,7 +416,13 @@ const Header: React.FC = () => {
                   </Button>
                   <Button
                     onClick={() => {
-                      clearAllWalletDataCompletely();
+                      try {
+                        clearAllWalletDataCompletely();
+                        toast.success('Wallet Removed!', 'All wallet data permanently deleted');
+                      } catch (error) {
+                        console.error('Failed to remove wallet data:', error);
+                        toast.error('Remove Failed', 'Could not remove all wallet data');
+                      }
                       setShowDisconnectModal(false);
                     }}
                     className="flex-1 bg-red-600 hover:bg-red-700 text-white"
@@ -490,9 +535,15 @@ const Header: React.FC = () => {
                 </div>
                 {showPrivateKey && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (currentPrivateKey) {
-                        navigator.clipboard.writeText(currentPrivateKey);
+                        try {
+                          await navigator.clipboard.writeText(currentPrivateKey);
+                          toast.success('Private Key Copied!', 'Private key copied to clipboard securely');
+                        } catch (error) {
+                          console.error('Failed to copy private key:', error);
+                          toast.error('Copy Failed', 'Could not copy private key to clipboard');
+                        }
                       }
                     }}
                     className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm"

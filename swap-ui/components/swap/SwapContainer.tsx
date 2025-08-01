@@ -5,6 +5,7 @@ import { ArrowDownUp, Settings, Zap, Clock, TrendingUp, RefreshCw, RotateCcw } f
 import { Button, Input, TokenInput, TokenAmountDisplay, ErrorCard, useToast } from '@/components/ui';
 import TokenSelector from './TokenSelector';
 import SlippageModal from './SlippageModal';
+// Remove TutorialHighlight import - we now use data attributes for tutorial targeting
 import { useSwap } from '@/hooks/useSwap';
 import { useUIState, useWalletState, useNetworkState, useTokenState } from '@/stores';
 import { buildTransactionUrl } from '@/utils';
@@ -29,7 +30,7 @@ const SwapContainer: React.FC = () => {
     clearQuote,
   } = useSwap();
 
-  const { loading, error, clearError, openWalletModal, swapExecution, setSwapPending, setSwapCompleted, resetSwapExecution } = useUIState();
+  const { loading, error, clearError, openWalletModal, swapExecution, setSwapPending, setSwapCompleted, resetSwapExecution, tutorial, completeTutorialStep } = useUIState();
   const { isConnected, walletAddress } = useWalletState();
   const { selectedNetwork } = useNetworkState();
   const { refreshSpecificTokens } = useTokenState();
@@ -53,6 +54,8 @@ const SwapContainer: React.FC = () => {
 
   const fromTokenBalance = getLatestBalance(swapForm.fromToken);
   const toTokenBalance = getLatestBalance(swapForm.toToken);
+
+// Tutorial step completion tracking is now handled in TutorialGuide component
 
   // Helper function to refresh selected tokens
   const refreshSelectedTokens = async (showLoading = false) => {
@@ -182,6 +185,17 @@ const SwapContainer: React.FC = () => {
             onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer')
           } : undefined
         });
+        
+        // Complete "first-swap" tutorial step
+        if (tutorial.isActive) {
+          const swapStep = tutorial.steps.find(step => step.id === 'first-swap');
+          if (swapStep && !swapStep.completed && !swapStep.skipped) {
+            completeTutorialStep('first-swap');
+            // Dispatch event for tutorial guide
+            window.dispatchEvent(new CustomEvent('tutorial-swap-completed'));
+          }
+        }
+        
         // Clear quote on successful swap
         clearQuote();
       } else {
@@ -254,7 +268,10 @@ const SwapContainer: React.FC = () => {
           <div className="flex items-center justify-between">
             <label className="text-xs sm:text-sm font-medium text-gray-300">You pay</label>
             <div className="flex items-center space-x-1.5">
-              <div className="text-[10px] sm:text-xs text-gray-400">
+              <div 
+                className="text-[10px] sm:text-xs text-gray-400"
+                data-tutorial="token-balance"
+              >
                 Balance: <span className="text-white font-medium">{fromTokenBalance}</span>
               </div>
               {/* Manual Refresh Button */}
@@ -547,6 +564,7 @@ const SwapContainer: React.FC = () => {
           {!isConnected ? (
             <Button
               onClick={() => openWalletModal('connect')}
+              data-tutorial="connect-wallet"
               className="w-full py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold rounded-lg sm:rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.01] transform"
             >
               Connect Wallet
@@ -571,6 +589,7 @@ const SwapContainer: React.FC = () => {
             <Button
               onClick={handleSwap}
               disabled={loading.isLoading || swapExecution.status === 'pending'}
+              data-tutorial="swap-button"
               className={`w-full py-2.5 sm:py-3 text-sm sm:text-base font-semibold rounded-lg sm:rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-[1.01] transform ${
                 swapExecution.status === 'pending' 
                   ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'

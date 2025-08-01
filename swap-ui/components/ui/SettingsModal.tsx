@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Wifi, Key, Check, X, AlertTriangle, Info, Shield, Plus, Eye, EyeOff, RefreshCw, Clock } from 'lucide-react';
+import { Settings, Wifi, Key, Check, X, AlertTriangle, Info, Shield, Plus, Eye, EyeOff, RefreshCw, Clock, BookOpen } from 'lucide-react';
 import { Modal, Button, Input, useToast } from '@/components/ui';
 import { useNetworkState, useWalletState } from '@/stores';
 import { useWallet } from '@/hooks/useWallet';
@@ -12,9 +12,10 @@ import type { SessionConfig } from '@/libs/session-manager';
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRestartTutorial?: () => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestartTutorial }) => {
   const { rpcSettings, walletConfig, networks, setRpcSettings, setWalletConfig, loadNetworks } = useNetworkState();
   const { passkeySupported, walletAddress, activeWallet, isConnected, savedWallets } = useWalletState();
   const { getSessionConfig, updateSessionConfig, resetSessionConfig, switchWallet } = useWallet();
@@ -614,6 +615,48 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
               </div>
             </section>
             )}
+
+            {/* Tutorial Section */}
+            <section className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <BookOpen className="w-4 h-4 text-orange-400" />
+                <h3 className="text-sm font-semibold text-white">Tutorial & Help</h3>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-orange-400 mb-1">Guided Tour</h4>
+                      <p className="text-xs text-gray-300 leading-relaxed">
+                        Run the step-by-step tutorial to learn how to connect your wallet, add funds, and make your first swap.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-3 pt-3 border-t border-orange-500/20">
+                    {onRestartTutorial && (
+                      <Button
+                        onClick={onRestartTutorial}
+                        variant="secondary"
+                        className="text-xs px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border-orange-500/40 hover:border-orange-500/60"
+                      >
+                        <BookOpen className="w-3 h-3 mr-1.5" />
+                        Restart Tutorial
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-start space-x-2 p-2.5 bg-blue-500/10 border border-blue-500/30 rounded">
+                  <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs text-blue-300">
+                    <p className="font-medium mb-1">New User?</p>
+                    <p>The tutorial automatically starts for first-time users. You can restart it anytime from here.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
             
           </div>
           

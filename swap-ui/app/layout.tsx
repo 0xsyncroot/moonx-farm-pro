@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { PrivyProvider } from "@/providers";
 import { ToastProvider } from "@/components/ui/ToastContainer";
 import { AppInitializer } from "@/components/layout";
+import { TutorialGuide } from "@/components/tutorial";
 import "./globals.css";
 
 const inter = Inter({
@@ -79,9 +80,11 @@ export default function RootLayout({
       >
         <PrivyProvider>
           <ToastProvider>
-            <AppInitializer>
-              {children}
-            </AppInitializer>
+            <TutorialGuide>
+              <AppInitializer>
+                {children}
+              </AppInitializer>
+            </TutorialGuide>
           </ToastProvider>
         </PrivyProvider>
       </body>

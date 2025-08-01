@@ -27,6 +27,7 @@ export const NETWORKS: Record<string, Network> = {
     name: 'Base',
     chainId: 8453,
     rpc: process.env.BASE_RPC_URL || 'https://mainnet.base.org',
+    defaultRpc: 'https://mainnet.base.org',
     currency: 'ETH',
     logoUrl: 'https://raw.githubusercontent.com/base/brand-kit/refs/heads/main/logo/TheSquare/Digital/Base_square_blue.png',
     explorer: 'https://basescan.org',

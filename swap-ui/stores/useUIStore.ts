@@ -37,6 +37,22 @@ interface SwapSettings {
   expertMode: boolean; // Allow high price impact trades
 }
 
+interface TutorialStep {
+  id: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  skipped: boolean;
+  required: boolean; // If true, tutorial ends if this step is skipped
+}
+
+interface TutorialState {
+  isActive: boolean;
+  currentStepIndex: number;
+  steps: TutorialStep[];
+  isFirstTime: boolean; // Track if this is first time user
+}
+
 // UI state
 interface UIState {
   loading: LoadingState;
@@ -45,6 +61,7 @@ interface UIState {
   swapExecution: SwapExecutionState;
   gasSettings: GasSettings;
   swapSettings: SwapSettings;
+  tutorial: TutorialState;
 }
 
 // UI actions
@@ -79,6 +96,15 @@ interface UIActions {
   setTransactionDeadline: (deadline: number) => void;
   setExpertMode: (expertMode: boolean) => void;
   resetSwapSettings: () => void;
+
+  // Tutorial actions
+  startTutorial: () => void;
+  nextTutorialStep: () => void;
+  skipTutorialStep: () => void;
+  completeTutorialStep: (stepId: string) => void;
+  endTutorial: () => void;
+  setFirstTimeUser: (isFirstTime: boolean) => void;
+  setTutorialStepIndex: (index: number) => void;
   
   // Reset all UI state
   resetUIState: () => void;
@@ -112,6 +138,37 @@ const initialState: UIState = {
     slippage: 0.5, // Default 0.5% slippage
     transactionDeadline: 20, // Default 20 minutes
     expertMode: false, // Expert mode off by default
+  },
+  tutorial: {
+    isActive: false,
+    currentStepIndex: 0,
+    isFirstTime: true,
+    steps: [
+      {
+        id: 'connect-wallet',
+        title: 'Connect Wallet',
+        description: 'Connect your wallet using private key mode for secure access to DeFi features.',
+        completed: false,
+        skipped: false,
+        required: true,
+      },
+      {
+        id: 'add-funds',
+        title: 'Add Funds',
+        description: 'Learn how to deposit tokens to your wallet for trading.',
+        completed: false,
+        skipped: false,
+        required: false,
+      },
+      {
+        id: 'first-swap',
+        title: 'Make Your First Swap',
+        description: 'Experience seamless token swapping with best rates.',
+        completed: false,
+        skipped: false,
+        required: false,
+      },
+    ],
   },
 };
 
@@ -189,6 +246,104 @@ export const useUIStore = create<UIStore>()(
         swapSettings: initialState.swapSettings
       })),
 
+      // Tutorial actions
+      startTutorial: () => set((state) => ({
+        tutorial: {
+          ...state.tutorial,
+          isActive: true,
+          currentStepIndex: 0,
+          steps: state.tutorial.steps.map(step => ({
+            ...step,
+            completed: false,
+            skipped: false,
+          })),
+        }
+      })),
+      
+      nextTutorialStep: () => set((state) => {
+        const nextIndex = state.tutorial.currentStepIndex + 1;
+        const isComplete = nextIndex >= state.tutorial.steps.length;
+        
+        return {
+          tutorial: {
+            ...state.tutorial,
+            currentStepIndex: isComplete ? state.tutorial.steps.length - 1 : nextIndex,
+            isActive: !isComplete,
+          }
+        };
+      }),
+      
+      skipTutorialStep: () => set((state) => {
+        const currentStep = state.tutorial.steps[state.tutorial.currentStepIndex];
+        if (!currentStep) return state;
+        
+        // If current step is required and being skipped, end tutorial
+        if (currentStep.required) {
+          return {
+            tutorial: {
+              ...state.tutorial,
+              isActive: false,
+            }
+          };
+        }
+        
+        // Mark step as skipped and move to next
+        const updatedSteps = state.tutorial.steps.map((step, index) => 
+          index === state.tutorial.currentStepIndex 
+            ? { ...step, skipped: true }
+            : step
+        );
+        
+        const nextIndex = state.tutorial.currentStepIndex + 1;
+        const isComplete = nextIndex >= state.tutorial.steps.length;
+        
+        return {
+          tutorial: {
+            ...state.tutorial,
+            steps: updatedSteps,
+            currentStepIndex: isComplete ? state.tutorial.steps.length - 1 : nextIndex,
+            isActive: !isComplete,
+          }
+        };
+      }),
+      
+      completeTutorialStep: (stepId) => set((state) => {
+        const updatedSteps = state.tutorial.steps.map(step => 
+          step.id === stepId 
+            ? { ...step, completed: true }
+            : step
+        );
+        
+        return {
+          tutorial: {
+            ...state.tutorial,
+            steps: updatedSteps,
+          }
+        };
+      }),
+      
+      endTutorial: () => set((state) => ({
+        tutorial: {
+          ...state.tutorial,
+          isActive: false,
+          isFirstTime: false,
+        }
+      })),
+      
+      setFirstTimeUser: (isFirstTime) => set((state) => ({
+        tutorial: {
+          ...state.tutorial,
+          isFirstTime,
+        }
+      })),
+
+      setTutorialStepIndex: (index) => set((state) => ({
+        tutorial: {
+          ...state.tutorial,
+          currentStepIndex: Math.max(0, Math.min(index, state.tutorial.steps.length - 1)),
+        }
+      })),
+
       // Reset all UI state
       resetUIState: () => set(initialState),
     }),
@@ -204,6 +359,7 @@ export const useUIState = () => useUIStore(useShallow((state) => ({
   swapExecution: state.swapExecution,
   gasSettings: state.gasSettings,
   swapSettings: state.swapSettings,
+  tutorial: state.tutorial,
   setLoading: state.setLoading,
   clearLoading: state.clearLoading,
   setError: state.setError,
@@ -223,6 +379,12 @@ export const useUIState = () => useUIStore(useShallow((state) => ({
   setTransactionDeadline: state.setTransactionDeadline,
   setExpertMode: state.setExpertMode,
   resetSwapSettings: state.resetSwapSettings,
+  startTutorial: state.startTutorial,
+  nextTutorialStep: state.nextTutorialStep,
+  skipTutorialStep: state.skipTutorialStep,
+  completeTutorialStep: state.completeTutorialStep,
+  endTutorial: state.endTutorial,
+  setFirstTimeUser: state.setFirstTimeUser,
   resetUIState: state.resetUIState,
 })));
 
@@ -231,6 +393,7 @@ export const useLoading = () => useUIStore(state => state.loading);
 export const useError = () => useUIStore(state => state.error);
 export const useWalletModal = () => useUIStore(state => state.walletModal);
 export const useSwapExecution = () => useUIStore(state => state.swapExecution);
+export const useTutorial = () => useUIStore(state => state.tutorial);
 
 // Action selectors
 export const useLoadingActions = () => useUIStore(useShallow((state) => ({
@@ -252,4 +415,14 @@ export const useSwapExecutionActions = () => useUIStore(useShallow((state) => ({
 export const useWalletModalActions = () => useUIStore(useShallow((state) => ({
   openWalletModal: state.openWalletModal,
   closeWalletModal: state.closeWalletModal,
+})));
+
+export const useTutorialActions = () => useUIStore(useShallow((state) => ({
+  startTutorial: state.startTutorial,
+  nextTutorialStep: state.nextTutorialStep,
+  skipTutorialStep: state.skipTutorialStep,
+  completeTutorialStep: state.completeTutorialStep,
+  endTutorial: state.endTutorial,
+  setFirstTimeUser: state.setFirstTimeUser,
+  setTutorialStepIndex: state.setTutorialStepIndex,
 })));

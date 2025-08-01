@@ -307,15 +307,21 @@ const WalletModal: React.FC = () => {
                       >
                         <button
                           onClick={() => handleSwitchWallet(wallet)}
-                          className="flex items-center space-x-3 flex-1 text-left"
+                          disabled={loading.isLoading}
+                          className="flex items-center space-x-3 flex-1 text-left disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <div className="w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-                            <Wallet className="w-4 h-4 text-green-400" />
+                            {loading.isLoading ? (
+                              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                              <Wallet className="w-4 h-4 text-green-400" />
+                            )}
                           </div>
                           <div>
                             <div className="text-white font-medium">{wallet.name}</div>
                             <div className="text-gray-400 text-sm">
-                              {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                              {loading.isLoading && loading.loadingMessage ? loading.loadingMessage : 
+                               `${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`}
                             </div>
                           </div>
                         </button>

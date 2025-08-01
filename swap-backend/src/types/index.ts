@@ -2,6 +2,7 @@ export interface Network {
   name: string;
   chainId: number;
   rpc: string;
+  defaultRpc: string;
   currency: string;
   multicall3Address: string;
   logoUrl: string;

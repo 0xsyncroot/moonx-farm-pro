@@ -161,6 +161,17 @@ export const useWallet = () => {
   // Switch to different wallet
   const switchWallet = useCallback(async (wallet: EncryptedWallet): Promise<boolean> => {
     try {
+      setLoading(true, 'Connecting to wallet...');
+      
+      // 🔒 SECURE: Create new session for switched wallet FIRST
+      // This includes authentication automatically
+      const sessionCreated = await sessionManager.createSession(wallet);
+      if (!sessionCreated) {
+        setError(true, 'Authentication failed. Please try again.');
+        return false;
+      }
+
+      // Only update wallet state after successful authentication
       setActiveWalletStorage(wallet.address);
       setWalletAddress(wallet.address);
       setActiveWallet(wallet);
@@ -170,26 +181,21 @@ export const useWallet = () => {
       saveWalletToStorage(updatedWallet);
       addWallet(updatedWallet);
 
-      // 🔒 SECURE: Create new session for switched wallet
-      try {
-        const sessionCreated = await sessionManager.createSession(wallet);
-        // Session creation includes authentication automatically
-      } catch (sessionError) {
-        // Handle error silently - user can authenticate later when needed
-      }
-
       // Set wallet config without private key
       setWalletConfig({
         walletType: 'private',
         privateKey: undefined, // Private key handled by session manager
       });
       
+      clearError();
       return true;
     } catch (error) {
-      setError(true, 'Failed to switch wallet');
+      setError(true, 'Failed to connect wallet. Please try again.');
       return false;
+    } finally {
+      setLoading(false);
     }
-  }, [setWalletAddress, setActiveWallet, addWallet, setError, setWalletConfig]);
+  }, [setWalletAddress, setActiveWallet, addWallet, setError, setWalletConfig, setLoading, clearError]);
 
   // Disconnect current wallet
   const disconnectWallet = useCallback(() => {
