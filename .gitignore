@@ -1,0 +1,353 @@
+# ================================================================
+# MoonX Swap - Comprehensive .gitignore
+# ================================================================
+# 
+# Project: MoonX Swap DApp (Frontend: Next.js + Backend: Fastify)
+# Package Manager: pnpm (monorepo)
+# Tech Stack: TypeScript, Next.js, Fastify, Ethers.js, Zustand
+#
+
+# ================================================================
+# Node.js & pnpm
+# ================================================================
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+
+# Package manager files (keep pnpm-lock.yaml for this project)
+package-lock.json
+yarn.lock
+# pnpm-lock.yaml  # Keep this for pnpm projects
+
+# pnpm specific
+.pnp.*
+.pnp/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ================================================================
+# Environment & Configuration Files
+# ================================================================
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Configuration files that may contain secrets
+.envrc
+.env.example.local
+
+# ================================================================
+# Frontend (Next.js) Specific
+# ================================================================
+
+# Next.js build output
+.next/
+out/
+build/
+
+# Static exports
+out/
+
+# Vercel deployment
+.vercel
+
+# Next.js cache
+.next/cache/
+
+# ================================================================
+# Backend (Fastify/Node.js) Specific
+# ================================================================
+
+# Compiled JavaScript (TypeScript output)
+dist/
+lib/
+build/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# ================================================================
+# TypeScript
+# ================================================================
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Type checking cache
+.tscheckCache/
+
+# ================================================================
+# Development Tools & IDEs
+# ================================================================
+
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# WebStorm/IntelliJ
+.idea/
+*.swp
+*.swo
+*~
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# ================================================================
+# Operating System Files
+# ================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ================================================================
+# Security & Sensitive Files
+# ================================================================
+
+# Private keys & certificates
+*.pem
+*.key
+*.crt
+*.csr
+*.cer
+*.p12
+*.pfx
+*.p8
+
+# Wallet files & private keys
+wallet.json
+keystore/
+*.keystore
+
+# Auth & secrets
+secrets/
+.secrets
+.auth
+*.secret
+
+# ================================================================
+# Cache & Temporary Files
+# ================================================================
+
+# General cache
+.cache/
+cache/
+.temp/
+.tmp/
+tmp/
+
+# pnpm cache
+.pnpm-store/
+
+# npm cache  
+.npm
+
+# Yarn cache
+.yarn/cache
+.yarn/install-state.gz
+
+# Turbo cache
+.turbo/
+
+# ================================================================
+# Logs & Debug
+# ================================================================
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime logs
+*.log.*
+*.out
+*.err
+
+# ================================================================
+# Testing & Coverage
+# ================================================================
+
+# Test coverage
+coverage/
+.coverage
+.nyc_output
+lcov.info
+*.lcov
+
+# Jest cache
+.jest-cache/
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ================================================================
+# Blockchain & Crypto Specific
+# ================================================================
+
+# Hardhat
+cache/
+artifacts/
+typechain-types/
+
+# Foundry/Forge
+out/
+cache_forge/
+broadcast/
+
+# Local blockchain data
+chaindata/
+.chaindata/
+
+# Gas reports
+gas-report.txt
+
+# ================================================================
+# Build & Distribution
+# ================================================================
+
+# Build artifacts
+*.tgz
+*.tar.gz
+
+# Distribution files
+dist/
+build/
+lib/
+
+# ================================================================
+# Monitoring & Analytics
+# ================================================================
+
+# Sentry
+.sentryclirc
+
+# Bundle analyzer
+.next/analyze/
+
+# ================================================================
+# Misc Files
+# ================================================================
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Lock files for specific operations
+.lock-wscript
+
+# Optional REPL history
+.node_repl_history
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# ================================================================
+# Project Specific Ignores
+# ================================================================
+
+# MoonX specific temporary files
+moonx-temp/
+.moonx-cache/
+
+# Swap data cache (if any)
+.swap-cache/
+
+# Local development databases
+*.db
+*.sqlite
+*.sqlite3
+
+# ================================================================
