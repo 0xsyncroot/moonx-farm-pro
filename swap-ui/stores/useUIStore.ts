@@ -31,6 +31,12 @@ interface GasSettings {
   baseFeePerGas: string; // Current network base fee (auto-fetched, read-only)
 }
 
+interface SwapSettings {
+  slippage: number; // Slippage tolerance in percentage (0.1 = 0.1%)
+  transactionDeadline: number; // Transaction deadline in minutes
+  expertMode: boolean; // Allow high price impact trades
+}
+
 // UI state
 interface UIState {
   loading: LoadingState;
@@ -38,6 +44,7 @@ interface UIState {
   walletModal: WalletModalState;
   swapExecution: SwapExecutionState;
   gasSettings: GasSettings;
+  swapSettings: SwapSettings;
 }
 
 // UI actions
@@ -67,6 +74,12 @@ interface UIActions {
   setGasSpeed: (speed: 'standard' | 'fast' | 'instant') => void;
   resetGasSettings: () => void;
   
+  // Swap settings actions
+  setSlippage: (slippage: number) => void;
+  setTransactionDeadline: (deadline: number) => void;
+  setExpertMode: (expertMode: boolean) => void;
+  resetSwapSettings: () => void;
+  
   // Reset all UI state
   resetUIState: () => void;
 }
@@ -94,6 +107,11 @@ const initialState: UIState = {
     baseFeePerGas: '0', // Will be auto-fetched from network
     useCustomGas: false, // Use auto gas by default
     gasSpeed: 'standard', // Standard speed by default
+  },
+  swapSettings: {
+    slippage: 0.5, // Default 0.5% slippage
+    transactionDeadline: 20, // Default 20 minutes
+    expertMode: false, // Expert mode off by default
   },
 };
 
@@ -157,6 +175,20 @@ export const useUIStore = create<UIStore>()(
         gasSettings: initialState.gasSettings
       })),
 
+      // Swap settings actions
+      setSlippage: (slippage) => set((state) => ({
+        swapSettings: { ...state.swapSettings, slippage }
+      })),
+      setTransactionDeadline: (transactionDeadline) => set((state) => ({
+        swapSettings: { ...state.swapSettings, transactionDeadline }
+      })),
+      setExpertMode: (expertMode) => set((state) => ({
+        swapSettings: { ...state.swapSettings, expertMode }
+      })),
+      resetSwapSettings: () => set((state) => ({
+        swapSettings: initialState.swapSettings
+      })),
+
       // Reset all UI state
       resetUIState: () => set(initialState),
     }),
@@ -171,6 +203,7 @@ export const useUIState = () => useUIStore(useShallow((state) => ({
   walletModal: state.walletModal,
   swapExecution: state.swapExecution,
   gasSettings: state.gasSettings,
+  swapSettings: state.swapSettings,
   setLoading: state.setLoading,
   clearLoading: state.clearLoading,
   setError: state.setError,
@@ -186,6 +219,10 @@ export const useUIState = () => useUIStore(useShallow((state) => ({
   setUseCustomGas: state.setUseCustomGas,
   setGasSpeed: state.setGasSpeed,
   resetGasSettings: state.resetGasSettings,
+  setSlippage: state.setSlippage,
+  setTransactionDeadline: state.setTransactionDeadline,
+  setExpertMode: state.setExpertMode,
+  resetSwapSettings: state.resetSwapSettings,
   resetUIState: state.resetUIState,
 })));
 

@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, X, AlertTriangle, Zap, Fuel, DollarSign } from 'lucide-react';
-import { Modal } from '@/components/ui';
+import { Modal, useToast } from '@/components/ui';
 import { useGasSettings } from '@/hooks/useGasSettings';
 import { useNetworkState } from '@/stores';
 
 interface SlippageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentSlippage: number;
-  onSlippageChange: (slippage: number) => void;
+  currentSlippage: number; // For compatibility, but store value takes precedence
+  onSlippageChange: (slippage: number) => void; // Syncs parent component
 }
 
 const SlippageModal: React.FC<SlippageModalProps> = ({
@@ -22,10 +22,14 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
   // Follow Clean Architecture: UI → Hook → Store → Service
   const {
     gasSettings,
+    swapSettings,
     setGasSpeedPreset,
     toggleCustomGas,
     setGasLimitBoost,
     setPriorityFeeTip,
+    setSlippage,
+    setTransactionDeadline,
+    setExpertMode,
     validateGasInput,
     formatGasForDisplay,
     getGasRecommendations,
@@ -35,13 +39,23 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
   } = useGasSettings();
   
   const { selectedNetwork } = useNetworkState();
+  const toast = useToast();
   
-  const [customSlippage, setCustomSlippage] = useState(currentSlippage.toString());
-  const [selectedPreset, setSelectedPreset] = useState<number | null>(
-    [0.1, 0.5, 1.0].includes(currentSlippage) ? currentSlippage : null
-  );
   const [gasCostEstimate, setGasCostEstimate] = useState<string>('');
   const [gasRecommendations, setGasRecommendations] = useState<any>(null);
+
+  // Sync slippage with store when modal opens
+  useEffect(() => {
+    if (isOpen && swapSettings) {
+      // Update local slippage display with store value
+      onSlippageChange(swapSettings.slippage);
+    }
+  }, [isOpen, swapSettings, onSlippageChange]);
+
+  // Store value takes precedence over prop for consistency
+  const effectiveSlippage = swapSettings?.slippage ?? currentSlippage ?? 0.5;
+  const customSlippage = effectiveSlippage.toString();
+  const selectedPreset = [0.1, 0.5, 1.0].includes(effectiveSlippage) ? effectiveSlippage : null;
 
   // Load gas recommendations when modal opens or settings change
   useEffect(() => {
@@ -73,18 +87,32 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
   ];
 
   const handlePresetClick = (value: number) => {
-    setSelectedPreset(value);
-    setCustomSlippage(value.toString());
+    setSlippage(value);
     onSlippageChange(value);
   };
 
   const handleCustomSlippageChange = (value: string) => {
-    setCustomSlippage(value);
-    setSelectedPreset(null);
-    
     const numValue = parseFloat(value);
     if (!isNaN(numValue) && numValue >= 0 && numValue <= 50) {
+      setSlippage(numValue);
       onSlippageChange(numValue);
+    }
+  };
+
+  const handleSaveSettings = () => {
+    try {
+      // Settings are automatically saved to store through individual actions
+      // No need for batch save since updates happen real-time
+      
+      // Show success toast with current settings
+      toast.success('Settings Saved!', 
+        `Slippage: ${effectiveSlippage}%, Deadline: ${swapSettings?.transactionDeadline || 20}min, Gas: ${gasSpeedLabel}`
+      );
+      
+      onClose();
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      toast.error('Save Failed', 'Please try again');
     }
   };
 
@@ -95,19 +123,23 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
     return null;
   };
 
-  const warning = getSlippageWarning(parseFloat(customSlippage) || 0);
+  const warning = getSlippageWarning(effectiveSlippage);
 
   return (
     <Modal 
       isOpen={isOpen} 
       onClose={onClose} 
       title="Swap Settings"
-      size="sm"
+      size="xl"
+      className="max-w-2xl"
     >
-      <div className="space-y-6">
+      {/* Content with proper flex layout */}
+      <div className="flex flex-col h-full max-h-[70vh]">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4 pr-1">
         {/* Slippage Tolerance Section */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-white">Slippage Tolerance</label>
             <div className="flex items-center space-x-1 text-xs text-gray-400">
               <Settings className="w-3 h-3" />
@@ -116,12 +148,12 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
           </div>
 
           {/* Preset Buttons */}
-          <div className="flex space-x-2 mb-3">
+          <div className="flex space-x-2 mb-2">
             {presetSlippages.map((preset) => (
               <button
                 key={preset.value}
                 onClick={() => handlePresetClick(preset.value)}
-                className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-all duration-200 ${
+                className={`flex-1 py-1.5 px-2.5 text-sm font-medium rounded-lg transition-all duration-200 ${
                   selectedPreset === preset.value
                     ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                     : 'bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700'
@@ -142,7 +174,7 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
               min="0"
               max="50"
               step="0.1"
-              className={`w-full px-3 py-2 bg-gray-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
+              className={`w-full px-3 py-1.5 bg-gray-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 transition-all duration-200 ${
                 warning?.type === 'warning' 
                   ? 'border-red-500 focus:ring-red-500/20' 
                   : warning?.type === 'caution'
@@ -150,12 +182,12 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
                   : 'border-gray-700 focus:ring-orange-500/20'
               }`}
             />
-            <span className="absolute right-3 top-2 text-gray-400 text-sm">%</span>
+            <span className="absolute right-3 top-1.5 text-gray-400 text-sm">%</span>
           </div>
 
           {/* Warning Message */}
           {warning && (
-            <div className={`flex items-center space-x-2 mt-2 p-2 rounded-lg text-xs ${
+            <div className={`flex items-center space-x-2 mt-1.5 p-1.5 rounded text-xs ${
               warning.type === 'warning' 
                 ? 'bg-red-500/10 text-red-400' 
                 : warning.type === 'caution'
@@ -168,29 +200,59 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
           )}
         </div>
 
-        {/* Transaction Deadline */}
-        <div>
-          <label className="block text-sm font-medium text-white mb-3">
-            Transaction Deadline
-          </label>
-          <div className="flex items-center space-x-2">
-            <input
-              type="number"
-              defaultValue="20"
-              min="1"
-              max="180"
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-            />
-            <span className="text-gray-400 text-sm">minutes</span>
+        {/* Transaction Deadline & Gas Settings Container */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Transaction Deadline */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Transaction Deadline
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                value={swapSettings?.transactionDeadline || 20}
+                onChange={(e) => setTransactionDeadline(parseInt(e.target.value))}
+                min="1"
+                max="180"
+                className="flex-1 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+              />
+              <span className="text-gray-400 text-xs">min</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Transaction reverts if pending too long
+            </p>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Your transaction will revert if it is pending for more than this long.
-          </p>
+
+          {/* Gas Cost Estimate */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Estimated Gas Cost
+            </label>
+            <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center space-x-1">
+                  <DollarSign className="w-3 h-3 text-blue-400" />
+                  <span className="text-xs text-blue-400">Cost:</span>
+                </div>
+                <span className="text-sm font-medium text-blue-300">
+                  {gasCostEstimate || 'Loading...'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 text-xs">
+                <div className="text-gray-400">
+                  Speed: <span className="text-white">{gasSpeedLabel}</span>
+                </div>
+                <div className="text-gray-400">
+                  Boost: <span className="text-white">+{gasSettings.gasLimitBoost}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Gas Settings Section */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-white">Gas Settings</label>
             <div className="flex items-center space-x-1 text-xs text-gray-400">
               <Fuel className="w-3 h-3" />
@@ -201,35 +263,35 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
           {/* Gas Speed Presets */}
           <div className="space-y-3">
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-2">Transaction Speed</label>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Transaction Speed</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { value: 'standard', label: 'Standard', desc: 'Normal speed', icon: '🐌' },
-                  { value: 'fast', label: 'Fast', desc: '+25% faster', icon: '🚗' },
-                  { value: 'instant', label: 'Instant', desc: '+50% faster', icon: '🚀' },
+                  { value: 'standard', label: 'Standard', desc: 'Normal', icon: '🐌' },
+                  { value: 'fast', label: 'Fast', desc: '+25%', icon: '🚗' },
+                  { value: 'instant', label: 'Instant', desc: '+50%', icon: '🚀' },
                 ].map((preset) => (
                   <button
                     key={preset.value}
                     onClick={() => setGasSpeedPreset(preset.value as any)}
-                    className={`p-3 rounded-lg text-center transition-all duration-200 border ${
+                    className={`p-3 rounded text-center transition-all duration-200 border ${
                       gasSettings.gasSpeed === preset.value
                         ? 'bg-orange-500/20 border-orange-500/30 text-orange-400'
                         : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
                     }`}
                   >
                     <div className="text-lg mb-1">{preset.icon}</div>
-                    <div className="text-xs font-semibold">{preset.label}</div>
-                    <div className="text-[10px] text-gray-400">{preset.desc}</div>
+                    <div className="text-sm font-medium">{preset.label}</div>
+                    <div className="text-xs text-gray-400">{preset.desc}</div>
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Custom Gas Toggle */}
-            <div className="flex items-center justify-between p-2 bg-gray-800/30 rounded-lg">
+            <div className="flex items-center justify-between p-2.5 bg-gray-800/30 rounded">
               <div>
-                <div className="text-xs font-medium text-white">Custom Gas Settings</div>
-                <div className="text-[10px] text-gray-400">Set specific gas prices in gwei</div>
+                <div className="text-sm font-medium text-white">Custom Gas Settings</div>
+                <div className="text-xs text-gray-400">Set specific gas prices</div>
               </div>
               <button 
                 onClick={() => toggleCustomGas(!isCustomGasMode)}
@@ -237,18 +299,18 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
                   isCustomGasMode ? 'bg-orange-500' : 'bg-gray-600'
                 }`}
               >
-                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                  isCustomGasMode ? 'translate-x-5' : 'translate-x-1'
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                  isCustomGasMode ? 'translate-x-4.5' : 'translate-x-0.5'
                 }`} />
               </button>
             </div>
 
             {/* Custom Gas Inputs */}
             {isCustomGasMode && (
-              <div className="space-y-3 p-3 bg-gray-800/20 rounded-lg border border-gray-700/50">
+              <div className="space-y-3 p-3 bg-gray-800/20 rounded border border-gray-700/50">
                 <div>
-                  <label className="block text-xs font-medium text-gray-300 mb-1">
-                    Priority Fee Tip for Miners
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Priority Fee Tip
                   </label>
                   <div className="relative">
                     <input
@@ -263,29 +325,29 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
                       min="0"
                       max="100"
                       step="0.1"
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 pr-12"
+                      className="w-full px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 pr-12"
                     />
-                    <span className="absolute right-3 top-2 text-gray-400 text-xs">gwei</span>
+                    <span className="absolute right-3 top-1.5 text-gray-400 text-xs">gwei</span>
                   </div>
-                  <div className="text-[10px] text-gray-500 mt-1">
-                    This tip will be added to the network base fee. Higher tip = faster confirmation.
+                  <div className="text-xs text-gray-500 mt-1">
+                    Added to base fee for faster confirmation
                   </div>
                 </div>
                 
                 {/* Display current gas calculation */}
                 {gasSettings.baseFeePerGas && parseFloat(gasSettings.baseFeePerGas) > 0 && (
-                  <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded">
                     <div className="text-xs text-blue-400 mb-1">Gas Calculation:</div>
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="grid grid-cols-2 gap-1.5 text-xs">
                       <div className="text-gray-400">
-                        Base Fee: <span className="text-white">{gasSettings.baseFeePerGas} gwei</span>
+                        Base: <span className="text-white">{gasSettings.baseFeePerGas}</span>
                       </div>
                       <div className="text-gray-400">
-                        Your Tip: <span className="text-white">{gasSettings.priorityFeeTip || '0'} gwei</span>
+                        Tip: <span className="text-white">{gasSettings.priorityFeeTip || '0'}</span>
                       </div>
                     </div>
                     <div className="text-xs text-blue-300 mt-1 font-medium">
-                      Total Max Fee: {maxFeePerGas || 'Auto'} gwei
+                      Max Fee: {maxFeePerGas || 'Auto'} gwei
                     </div>
                   </div>
                 )}
@@ -293,9 +355,9 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
             )}
 
             {/* Gas Limit Boost */}
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-2">
-                Gas Limit Boost: {gasSettings.gasLimitBoost}%
+            <div className="bg-gray-800/30 p-3 rounded">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Gas Limit Boost: <span className="text-orange-400">{gasSettings.gasLimitBoost}%</span>
               </label>
               <input
                 type="range"
@@ -304,53 +366,42 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
                 step="5"
                 value={gasSettings.gasLimitBoost}
                 onChange={(e) => setGasLimitBoost(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 bg-gray-700 rounded appearance-none cursor-pointer"
               />
-              <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+              <div className="flex justify-between text-xs text-gray-500 mt-1.5">
                 <span>Normal</span>
-                <span>+100% Safety</span>
+                <span>Max Safety</span>
+              </div>
+              <div className="text-xs text-gray-400 mt-1.5">
+                Prevents out-of-gas errors
               </div>
             </div>
 
-            {/* Gas Cost Estimate */}
-            <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-1">
-                  <DollarSign className="w-3 h-3 text-blue-400" />
-                  <span className="text-xs text-blue-400">Estimated Cost:</span>
-                </div>
-                <span className="text-xs font-semibold text-blue-300">
-                  {gasCostEstimate || 'Loading...'}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[10px]">
-                <div className="text-gray-400">
-                  Speed: <span className="text-white">{gasSpeedLabel}</span>
-                </div>
-                <div className="text-gray-400">
-                  Gas Boost: <span className="text-white">+{gasSettings.gasLimitBoost}%</span>
-                </div>
-              </div>
-              <div className="text-[10px] text-blue-300/70 mt-2">
-                {isCustomGasMode ? 'Using custom gas settings' : 'Using recommended gas prices'}
-              </div>
-            </div>
+
           </div>
         </div>
 
         {/* Expert Mode Toggle */}
-        <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+        <div className="flex items-center justify-between p-2.5 bg-gray-800/50 rounded">
           <div>
             <div className="text-sm font-medium text-white">Expert Mode</div>
-            <div className="text-xs text-gray-400">Allow high price impact trades</div>
+            <div className="text-xs text-gray-400">Allow high price impact</div>
           </div>
-          <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-600 transition-colors">
-            <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-1" />
+          <button 
+            onClick={() => setExpertMode(!swapSettings?.expertMode)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              swapSettings?.expertMode ? 'bg-orange-500' : 'bg-gray-600'
+            }`}
+          >
+            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+              swapSettings?.expertMode ? 'translate-x-4.5' : 'translate-x-0.5'
+            }`} />
           </button>
         </div>
+        </div>
 
-        {/* Action Buttons */}
-        <div className="flex space-x-3 pt-4 border-t border-gray-800">
+        {/* Sticky Action Buttons */}
+        <div className="flex-shrink-0 flex space-x-3 pt-4 border-t border-gray-800 mt-4">
           <button
             onClick={onClose}
             className="flex-1 py-2 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium text-sm transition-colors"
@@ -358,10 +409,10 @@ const SlippageModal: React.FC<SlippageModalProps> = ({
             Cancel
           </button>
           <button
-            onClick={onClose}
+            onClick={handleSaveSettings}
             className="flex-1 py-2 px-4 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium text-sm transition-all duration-200"
           >
-            Save
+            Save Settings
           </button>
         </div>
       </div>

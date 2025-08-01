@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, Wifi, Key, Check, X, AlertTriangle, Info, Shield, Plus, Eye, EyeOff, RefreshCw, Clock } from 'lucide-react';
-import { Modal, Button, Input } from '@/components/ui';
+import { Modal, Button, Input, useToast } from '@/components/ui';
 import { useNetworkState, useWalletState } from '@/stores';
 import { useWallet } from '@/hooks/useWallet';
 import { generateRandomWallet, isPasskeySupported } from '@/libs/crypto';
@@ -18,6 +18,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
   const { rpcSettings, walletConfig, networks, setRpcSettings, setWalletConfig, loadNetworks } = useNetworkState();
   const { passkeySupported, walletAddress, activeWallet, isConnected, savedWallets } = useWalletState();
   const { getSessionConfig, updateSessionConfig, resetSessionConfig, switchWallet } = useWallet();
+  const toast = useToast();
   
   const [tempRpcSettings, setTempRpcSettings] = useState<RPCSettings>(rpcSettings);
   const [tempWalletConfig, setTempWalletConfig] = useState<WalletConfig>(walletConfig);
@@ -88,6 +89,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
         updateSessionConfig(tempSessionConfig);
       } catch (error) {
         console.error('Failed to save session config:', error);
+        toast.warning('Session Config Warning', 'Session settings may not be saved properly');
       }
       
       // If user entered a new private key, handle wallet connection
@@ -98,9 +100,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       }
       
       console.log('✅ SettingsModal: Settings saved successfully');
+      
+      // Show success toast with summary
+      const rpcStatus = tempRpcSettings.useCustomRpc ? 'Custom RPC' : 'Default RPC';
+      const walletType = tempWalletConfig.walletType === 'privy' ? 'Privy Wallet' : 'Private Key';
+      const sessionTimeout = `${tempSessionConfig.sessionTimeout}min`;
+      
+      toast.success('Settings Saved!', 
+        `${walletType}, ${rpcStatus}, Session: ${sessionTimeout}`
+      );
+      
       onClose();
     } catch (error) {
       console.error('❌ SettingsModal: Failed to save settings:', error);
+      toast.error('Save Failed', 'Failed to save settings. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -141,6 +154,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       
       if (!rpcUrl || !tempRpcSettings.useCustomRpc) {
         setRpcTestResult({ success: false, message: 'Custom RPC URL is required' });
+        toast.error('RPC Test Failed', 'Custom RPC URL is required');
         return;
       }
 
@@ -160,52 +174,60 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.result) {
+          const blockNumber = parseInt(data.result, 16);
           setRpcTestResult({ 
             success: true, 
-            message: `Custom RPC connected successfully (Block: ${parseInt(data.result, 16)})` 
+            message: `Custom RPC connected successfully (Block: ${blockNumber})` 
           });
+          toast.success('RPC Test Successful!', `Connected to block ${blockNumber}`);
         } else {
           setRpcTestResult({ success: false, message: 'Invalid RPC response' });
+          toast.error('RPC Test Failed', 'Invalid RPC response');
         }
       } else {
         setRpcTestResult({ success: false, message: `RPC connection failed (${response.status})` });
+        toast.error('RPC Test Failed', `Connection failed (${response.status})`);
       }
     } catch (error) {
       console.error('RPC test error:', error);
       setRpcTestResult({ success: false, message: 'Connection timeout or network error' });
+      toast.error('RPC Test Failed', 'Connection timeout or network error');
     } finally {
       setTestingRpc(false);
     }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleCancel} title="Settings" size="2xl" className="!max-w-none w-[98vw] sm:w-[95vw] md:w-[90vw] lg:w-[85vw] xl:w-[80vw] 2xl:max-w-7xl">
-      <div className="space-y-4 sm:space-y-6 max-h-[85vh] sm:max-h-[80vh] overflow-y-auto scrollbar-hide px-1 sm:px-2">
+    <Modal isOpen={isOpen} onClose={handleCancel} title="Settings" size="2xl" className="!max-w-none w-[95vw] sm:w-[90vw] md:w-[85vw] lg:w-[80vw] xl:w-[75vw] 2xl:max-w-6xl">
+      {/* Content with proper flex layout */}
+      <div className="flex flex-col h-full max-h-[75vh]">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide space-y-4 px-1 sm:px-2 pr-2">
         
         {/* Main Grid Layout - Responsive */}
-        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-4 lg:gap-6">
           
           {/* Left Column */}
-          <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+          <div className="space-y-4 lg:space-y-5">
             
             {/* RPC Configuration Section */}
-            <section className="space-y-4">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
-                  <Wifi className="w-4 h-4 text-white" />
+            <section className="space-y-3">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                  <Wifi className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-white">Network Configuration</h3>
-                  <p className="text-xs text-gray-400">Configure RPC endpoints and network settings</p>
+                  <h3 className="text-sm font-semibold text-white">Network Configuration</h3>
+                  <p className="text-xs text-gray-400">Configure RPC endpoints</p>
                 </div>
               </div>
           
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Default Base RPC URL - Read Only */}
             <div>
-              <label className="block text-xs font-medium text-white mb-2">
+              <label className="block text-xs font-medium text-white mb-1.5">
                 Default Base RPC URL
-                <span className="ml-2 text-xs text-gray-400">(System Default)</span>
+                <span className="ml-2 text-xs text-gray-400">(Default)</span>
               </label>
               <div className="relative">
                 <Input
@@ -220,12 +242,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                This is the default RPC endpoint for Base network
+                Default RPC endpoint for Base network
               </p>
             </div>
 
             {/* Custom RPC Configuration */}
-            <div className="space-y-3 p-3 bg-gray-800/30 rounded-lg border border-gray-700/50">
+            <div className="space-y-3 p-3 bg-gray-800/30 rounded border border-gray-700/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <input
@@ -303,14 +325,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             </section>
 
             {/* Wallet Configuration Section */}
-            <section className="space-y-4">
-          <div className="flex items-center space-x-3 mb-4">
-            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
-              <Key className="w-4 h-4 text-white" />
+            <section className="space-y-3">
+          <div className="flex items-center space-x-3 mb-3">
+            <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+              <Key className="w-3.5 h-3.5 text-white" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">Wallet Configuration</h3>
-              <p className="text-xs text-gray-400">Choose your preferred wallet connection method</p>
+              <h3 className="text-sm font-semibold text-white">Wallet Configuration</h3>
+              <p className="text-xs text-gray-400">Choose wallet connection method</p>
             </div>
           </div>
           
@@ -502,28 +524,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           </div>
           
           {/* Right Column */}
-          <div className="space-y-4 sm:space-y-6 lg:space-y-8">
+          <div className="space-y-4 lg:space-y-5">
             
             {/* Session Security Section */}
             {isConnected && activeWallet && (
-              <section className="space-y-4">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-white" />
+              <section className="space-y-3">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                    <Clock className="w-3.5 h-3.5 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-white">Session Security</h3>
-                    <p className="text-xs text-gray-400">Configure wallet session timeouts and auto-lock behavior</p>
+                    <h3 className="text-sm font-semibold text-white">Session Security</h3>
+                    <p className="text-xs text-gray-400">Configure timeouts and auto-lock</p>
                   </div>
                 </div>
             
-            <div className="space-y-5">
+            <div className="space-y-4">
               {/* Session Timeout */}
               <div>
-                <label className="block text-xs font-medium text-white mb-3">
+                <label className="block text-xs font-medium text-white mb-2">
                   Session Timeout
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-1.5">
                   {[
                     { label: '15m', value: 15 },
                     { label: '30m', value: 30 },
@@ -537,9 +559,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     <button
                       key={option.value}
                       onClick={() => setTempSessionConfig(prev => ({ ...prev, sessionTimeout: option.value }))}
-                      className={`p-2 sm:p-2.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      className={`p-1.5 rounded text-xs font-medium transition-all duration-200 ${
                         tempSessionConfig.sessionTimeout === option.value
-                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-lg shadow-purple-500/20'
+                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40'
                           : 'bg-gray-800/40 text-gray-300 border border-gray-600/40 hover:border-gray-500/50 hover:bg-gray-700/30'
                       }`}
                     >
@@ -547,17 +569,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  Time before session expires (requires re-authentication)
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Session expires after this time
                 </p>
               </div>
 
               {/* Activity Timeout */}
               <div>
-                <label className="block text-xs font-medium text-white mb-3">
+                <label className="block text-xs font-medium text-white mb-2">
                   Inactivity Auto-Lock
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-1.5">
                   {[
                     { label: 'Off', value: 0 },
                     { label: '5m', value: 5 },
@@ -567,9 +589,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     <button
                       key={option.value}
                       onClick={() => setTempSessionConfig(prev => ({ ...prev, activityTimeout: option.value }))}
-                      className={`p-2 sm:p-2.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                      className={`p-1.5 rounded text-xs font-medium transition-all duration-200 ${
                         tempSessionConfig.activityTimeout === option.value
-                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40 shadow-lg shadow-purple-500/20'
+                          ? 'bg-purple-500/20 text-purple-400 border border-purple-500/40'
                           : 'bg-gray-800/40 text-gray-300 border border-gray-600/40 hover:border-gray-500/50 hover:bg-gray-700/30'
                       }`}
                     >
@@ -577,16 +599,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     </button>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  Auto-lock wallet after period of inactivity
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Auto-lock after inactivity
                 </p>
               </div>
 
-              <div className="flex items-start space-x-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="flex items-start space-x-2 p-2.5 bg-blue-500/10 border border-blue-500/30 rounded">
+                <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-blue-300">
                   <p className="font-medium mb-1">Session Security</p>
-                  <p>These settings control when your wallet session automatically locks for security. Shorter timeouts provide better security but require more frequent authentication.</p>
+                  <p>Controls automatic wallet locks. Shorter timeouts = better security.</p>
                 </div>
                 </div>
               </div>
@@ -598,15 +620,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           {/* Network Info - Full Width on Large Screens */}
           {networks.length > 0 && (
             <div className="lg:col-span-2">
-              <section className="space-y-3 sm:space-y-4">
+              <section className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-semibold text-white">Available Networks</h3>
+                  <h3 className="text-sm font-semibold text-white">Available Networks</h3>
                   <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">{networks.length} networks</span>
                 </div>
-                <div className="text-xs text-gray-400 bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <div className="text-xs text-gray-400 bg-green-500/10 border border-green-500/20 rounded p-2.5">
                   <div className="flex items-center space-x-2">
                     <Check className="w-3 h-3 text-green-400" />
-                    <span className="text-green-400 font-medium">Networks loaded successfully from API</span>
+                    <span className="text-green-400 font-medium">Networks loaded successfully</span>
                   </div>
                 </div>
               </section>
@@ -614,32 +636,33 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           )}
           
         </div>
-      </div>
+        </div>
 
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 sm:pt-6 border-t border-gray-700 mt-4 sm:mt-6 px-1 sm:px-0">
-        <Button
-          onClick={handleCancel}
-          variant="secondary"
-          disabled={saving}
-          className="px-4 sm:px-6 w-full sm:w-auto"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSave}
-          disabled={saving}
-          className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-4 sm:px-6 w-full sm:w-auto"
-        >
-          {saving ? (
-            <div className="flex items-center justify-center space-x-2">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Saving...</span>
-            </div>
-          ) : (
-            'Save Settings'
-          )}
-        </Button>
+        {/* Sticky Action Buttons */}
+        <div className="flex-shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-800 mt-4 px-1 sm:px-2">
+          <Button
+            onClick={handleCancel}
+            variant="secondary"
+            disabled={saving}
+            className="px-4 py-2 w-full sm:w-auto text-sm"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-4 py-2 w-full sm:w-auto text-sm"
+          >
+            {saving ? (
+              <div className="flex items-center justify-center space-x-2">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Saving...</span>
+              </div>
+            ) : (
+              'Save Settings'
+            )}
+          </Button>
+        </div>
       </div>
     </Modal>
   );

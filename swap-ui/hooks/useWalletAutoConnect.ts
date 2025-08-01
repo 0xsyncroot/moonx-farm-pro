@@ -22,8 +22,6 @@ export const useWalletAutoConnect = (): AutoConnectResult => {
   const [isChecking, setIsChecking] = useState(true);
   const [isAutoConnected, setIsAutoConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const { setActiveWallet, setWalletAddress, setSavedWallets } = useWalletStore();
 
   useEffect(() => {
     let mounted = true;
@@ -74,10 +72,11 @@ export const useWalletAutoConnect = (): AutoConnectResult => {
         // Only update state if component is still mounted
         if (!mounted) return;
 
-        // Update stores with restored wallet data
-        setSavedWallets(savedWallets);
-        setActiveWallet(activeWalletData);
-        setWalletAddress(activeWalletData.address);
+        // Update stores with restored wallet data (use getState to avoid infinite loops)
+        const store = useWalletStore.getState();
+        store.setSavedWallets(savedWallets);
+        store.setActiveWallet(activeWalletData);
+        store.setWalletAddress(activeWalletData.address);
 
         // Set active wallet in secure signer
         secureSigner.setActiveWallet(activeWalletData);

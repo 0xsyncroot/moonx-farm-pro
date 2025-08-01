@@ -9,13 +9,18 @@ import { gasService } from '@/services';
  */
 export const useGasSettings = () => {
   const { 
-    gasSettings, 
+    gasSettings,
+    swapSettings,
     setGasLimitBoost,
     setPriorityFeeTip,
     setBaseFeePerGas,
     setUseCustomGas,
     setGasSpeed,
     resetGasSettings,
+    setSlippage,
+    setTransactionDeadline,
+    setExpertMode,
+    resetSwapSettings,
   } = useUIState();
   
   const { rpcSettings } = useNetworkState();
@@ -105,6 +110,9 @@ export const useGasSettings = () => {
     // Current gas settings state
     gasSettings,
     
+    // Current swap settings state
+    swapSettings,
+    
     // Validation helpers
     validateGasInput,
     formatGasForDisplay,
@@ -113,11 +121,17 @@ export const useGasSettings = () => {
     setGasSpeedPreset,
     toggleCustomGas,
     
-    // Direct store actions
+    // Direct store actions - Gas
     setGasLimitBoost,
     setPriorityFeeTip,
     setBaseFeePerGas,
     resetGasSettings,
+    
+    // Direct store actions - Swap
+    setSlippage,
+    setTransactionDeadline,
+    setExpertMode,
+    resetSwapSettings,
     
     // Service layer integration
     getGasRecommendations,

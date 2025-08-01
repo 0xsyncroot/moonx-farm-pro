@@ -89,7 +89,7 @@ export const usePrivyWallet = (config: UsePrivyWalletConfig = {}) => {
       // Only clear wallet for Privy wallets, not private key wallets
       setWalletAddress(null);
     }
-  }, [authenticated, wallets, filteredWallets, setWalletAddress, walletModal.isOpen, closeWalletModal, walletConfig.walletType]);
+  }, [authenticated, wallets, filteredWallets, walletModal.isOpen, walletConfig.walletType]);
 
   // Connect with Privy
   const connectWithPrivy = useCallback(async () => {

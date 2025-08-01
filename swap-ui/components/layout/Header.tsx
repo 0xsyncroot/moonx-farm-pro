@@ -282,17 +282,6 @@ const Header: React.FC = () => {
                           <Copy className="w-4 h-4" />
                           <span>Copy Address</span>
                         </button>
-                        
-                        <button
-                          onClick={() => {
-                            setShowWalletDropdown(false);
-                            openWalletModal('manage');
-                          }}
-                          className="w-full flex items-center space-x-3 px-3 py-2.5 text-gray-300 hover:text-white hover:bg-gray-700/50 rounded-lg transition-all duration-200"
-                        >
-                          <Wallet className="w-4 h-4" />
-                          <span>Manage Wallet</span>
-                        </button>
 
                         {/* Show Private Key (only for private key wallets) */}
                         {walletConfig.walletType === 'private' && (
