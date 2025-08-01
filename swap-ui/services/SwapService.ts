@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
-import { apiClient } from '@/lib/api';
-import { MOONX_CONTRACT_ADDRESS } from '@/lib/moonx';
-import { createWalletProvider, type WalletProviderConfig } from '@/lib/wallet-provider';
+import { apiClient } from '@/libs/api';
+import { MOONX_CONTRACT_ADDRESS } from '@/libs/moonx';
+import { createWalletProvider, type WalletProviderConfig } from '@/libs/wallet-provider';
 import type { TokenBalance, SwapQuote, ServiceResult, RPCSettings } from '@/types/api';
 import { gasService, type GasSettings } from './GasService';
 

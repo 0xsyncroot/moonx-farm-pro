@@ -255,7 +255,7 @@ updateSessionConfig({
 });
 
 // Secure transaction signing
-import { signTransaction } from '@/lib/secure-signer';
+import { signTransaction } from '@/libs/secure-signer';
 const signedTx = await signTransaction(txRequest);
 ```
 
@@ -463,7 +463,7 @@ const loadData = async () => {
 ### 📡 **HTTP Client**
 ```typescript
 // Pure HTTP client with retry logic
-import { apiClient } from '@/lib/api';
+import { apiClient } from '@/libs/api';
 
 // Automatic retry on network errors
 const data = await apiClient.get('/api/networks');

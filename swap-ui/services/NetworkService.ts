@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api';
+import { apiClient } from '@/libs/api';
 import type { Network, ServiceResult } from '@/types/api';
 
 export type NetworkServiceResult<T> = ServiceResult<T>;

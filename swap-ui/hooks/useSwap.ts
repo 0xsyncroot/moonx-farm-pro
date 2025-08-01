@@ -6,7 +6,7 @@ import {
   useWalletState,
   useTokenState 
 } from '@/stores';
-import { useUnifiedWallet } from '@/lib/wallet-provider';
+import { useUnifiedWallet } from '@/libs/wallet-provider';
 import { tokenService } from '@/services';
 import type { TokenBalance } from '@/types/api';
 

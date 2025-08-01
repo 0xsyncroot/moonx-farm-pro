@@ -5,9 +5,9 @@ import { Settings, Wifi, Key, Check, X, AlertTriangle, Info, Shield, Plus, Eye, 
 import { Modal, Button, Input } from '@/components/ui';
 import { useNetworkState, useWalletState } from '@/stores';
 import { useWallet } from '@/hooks/useWallet';
-import { generateRandomWallet, isPasskeySupported } from '@/lib/crypto';
+import { generateRandomWallet, isPasskeySupported } from '@/libs/crypto';
 import type { RPCSettings, WalletConfig } from '@/types';
-import type { SessionConfig } from '@/lib/session-manager';
+import type { SessionConfig } from '@/libs/session-manager';
 
 interface SettingsModalProps {
   isOpen: boolean;

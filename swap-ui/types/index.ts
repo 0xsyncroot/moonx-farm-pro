@@ -1,4 +1,4 @@
-import { EncryptedWallet } from '@/lib/crypto';
+import { EncryptedWallet } from '@/libs/crypto';
 import type { Network, TokenBalance, SwapQuote } from '@/types/api';
 
 // Re-export API types
@@ -13,7 +13,7 @@ export type {
 export type {
   EncryptedWallet,
   WalletSession
-} from '@/lib/crypto';
+} from '@/libs/crypto';
 
 // RPC and wallet configuration types  
 export interface RPCSettings {

@@ -16,9 +16,9 @@ import {
   clearAllWalletData,
   clearWalletFromStorage,
   type EncryptedWallet,
-} from '@/lib/crypto';
-import { sessionManager } from '@/lib/session-manager';
-import { secureSigner } from '@/lib/secure-signer';
+} from '@/libs/crypto';
+import { sessionManager } from '@/libs/session-manager';
+import { secureSigner } from '@/libs/secure-signer';
 
 export const useWallet = () => {
   const {

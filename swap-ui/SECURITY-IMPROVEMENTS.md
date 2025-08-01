@@ -181,7 +181,7 @@ import WalletSessionStatus from '@/components/wallet/WalletSessionStatus';
 ### 3. **Trong Transaction Logic**
 
 ```typescript
-import { signTransaction, signMessage } from '@/lib/secure-signer';
+import { signTransaction, signMessage } from '@/libs/secure-signer';
 
 // Sign transaction an toàn
 const signedTx = await signTransaction(txRequest);

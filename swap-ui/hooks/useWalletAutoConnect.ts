@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { sessionManager } from '@/lib/session-manager';
-import { secureSigner } from '@/lib/secure-signer';
+import { sessionManager } from '@/libs/session-manager';
+import { secureSigner } from '@/libs/secure-signer';
 import { 
   getActiveWallet, 
   getWalletsFromStorage, 
   type EncryptedWallet 
-} from '@/lib/crypto';
+} from '@/libs/crypto';
 import { useWalletStore } from '@/stores/useWalletStore';
 
 export interface AutoConnectResult {

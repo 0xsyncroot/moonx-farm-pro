@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useWallet } from '@/hooks/useWallet';
-import { sessionManager } from '@/lib/session-manager';
+import { sessionManager } from '@/libs/session-manager';
 
 interface SessionInfo {
   isActive: boolean;

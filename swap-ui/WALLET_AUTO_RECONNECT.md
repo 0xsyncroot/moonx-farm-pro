@@ -94,7 +94,7 @@ const {
 
 - `swap-ui/hooks/useWalletAutoConnect.ts` (new)
 - `swap-ui/hooks/useAppInitialization.ts`
-- `swap-ui/lib/secure-signer.ts`
+- `swap-ui/libs/secure-signer.ts`
 - `swap-ui/components/layout/AppInitializer.tsx`
 
 ## Configuration

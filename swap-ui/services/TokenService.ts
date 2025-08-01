@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api';
+import { apiClient } from '@/libs/api';
 import type { TokenBalance, ServiceResult } from '@/types/api';
 
 export type TokenServiceResult<T> = ServiceResult<T>;
