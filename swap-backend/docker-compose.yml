@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # Development environment
+  moonx-backend-dev:
+    build:
+      context: .
+      target: development
+    container_name: moonx-backend-dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - HOST=0.0.0.0
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - dev
+
+  # Production environment
+  moonx-backend-prod:
+    build:
+      context: .
+      target: production
+    container_name: moonx-backend-prod
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOST=0.0.0.0
+    env_file:
+      - .env
+    restart: unless-stopped
+    profiles:
+      - prod
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
