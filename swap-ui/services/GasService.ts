@@ -197,9 +197,22 @@ export class GasService {
     const populatedTx = await signer.populateTransaction(baseTxRequest);
 
     // Calculate gas limit with safety buffer + user boost
-    let finalGasLimit = estimatedGas ? BigInt(estimatedGas) : populatedTx.gasLimit;
-    if (!finalGasLimit) {
-      throw new Error('Could not determine gas limit');
+    let finalGasLimit: bigint;
+    
+    if (estimatedGas) {
+      // Use provided estimate
+      finalGasLimit = BigInt(estimatedGas);
+    } else if (populatedTx.gasLimit) {
+      // Use populated gas limit
+      finalGasLimit = BigInt(populatedTx.gasLimit.toString());
+    } else {
+      // Auto-estimate gas if populateTransaction didn't provide gasLimit
+      console.log('⛽ Auto-estimating gas as populateTransaction returned undefined gasLimit');
+      const estimatedGasLimit = await provider.estimateGas({
+        ...baseTxRequest,
+        from: await signer.getAddress()
+      });
+      finalGasLimit = BigInt(estimatedGasLimit.toString());
     }
 
     const safetyMultiplier = 1.5; // 50% buffer to prevent out-of-gas

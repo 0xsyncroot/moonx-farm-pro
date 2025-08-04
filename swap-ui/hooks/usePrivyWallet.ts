@@ -54,9 +54,8 @@ export const usePrivyWallet = (config: UsePrivyWalletConfig = {}) => {
   // Simply use hooks - PrivyProvider will handle errors gracefully
   const { login, logout, authenticated, user } = usePrivy();
   const { wallets } = useWallets();
-  const { setWalletAddress, setActiveWallet } = useWalletState();
+  const { setWalletAddress, setActiveWallet, walletConfig } = useWalletState();
   const { closeWalletModal, setError, clearError, walletModal } = useUIState();
-  const { walletConfig } = useNetworkState();
 
   // Default to external-only for backward compatibility
   const walletPreference = config.walletPreference || 'external-only';

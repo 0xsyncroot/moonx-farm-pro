@@ -7,9 +7,7 @@ export {
   useSelectedNetwork,
   useNetworks,
   useRpcSettings,
-  useWalletConfig,
   type RPCSettings,
-  type WalletConfig,
 } from './useNetworkStore';
 
 // Token Store
@@ -44,9 +42,14 @@ export {
   useSavedWallets,
   useActiveWallet,
   usePasskeySupported,
+  useWalletConfig,
   useWalletActions,
   type EncryptedWallet,
+  type WalletConfig,
 } from './useWalletStore';
+
+// Unified Wallet Hook (RECOMMENDED)
+export { useUnifiedWalletState } from '../hooks/useUnifiedWalletState';
 
 // UI Store
 export {

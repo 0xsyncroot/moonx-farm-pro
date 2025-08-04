@@ -1,10 +1,10 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
-import type { EncryptedWallet } from '@/types/api';
+import type { EncryptedWallet, WalletConfig } from '@/types/api';
 
 // Re-export types for convenience
-export type { EncryptedWallet } from '@/types/api';
+export type { EncryptedWallet, WalletConfig } from '@/types/api';
 
 // Wallet state
 interface WalletState {
@@ -12,6 +12,7 @@ interface WalletState {
   savedWallets: EncryptedWallet[];
   activeWallet: EncryptedWallet | null;
   passkeySupported: boolean;
+  walletConfig: WalletConfig;
 }
 
 // Wallet actions
@@ -20,6 +21,7 @@ interface WalletActions {
   setSavedWallets: (wallets: EncryptedWallet[]) => void;
   setActiveWallet: (wallet: EncryptedWallet | null) => void;
   setPasskeySupported: (supported: boolean) => void;
+  setWalletConfig: (config: WalletConfig) => void;
   addWallet: (wallet: EncryptedWallet) => void;
   removeWallet: (address: string) => void;
   clearWalletData: () => void;
@@ -33,6 +35,10 @@ const initialState: WalletState = {
   savedWallets: [],
   activeWallet: null,
   passkeySupported: false,
+  walletConfig: {
+    walletType: 'privy',
+    privateKey: undefined,
+  },
 };
 
 export const useWalletStore = create<WalletStore>()(
@@ -46,6 +52,7 @@ export const useWalletStore = create<WalletStore>()(
         setSavedWallets: (savedWallets) => set({ savedWallets }),
         setActiveWallet: (activeWallet) => set({ activeWallet }),
         setPasskeySupported: (passkeySupported) => set({ passkeySupported }),
+        setWalletConfig: (walletConfig) => set({ walletConfig }),
 
         // Add wallet (prevents duplicates)
         addWallet: (wallet) => {
@@ -70,6 +77,10 @@ export const useWalletStore = create<WalletStore>()(
         clearWalletData: () => set({
           walletAddress: null,
           activeWallet: null,
+          walletConfig: {
+            walletType: 'privy',
+            privateKey: undefined,
+          },
           // Keep savedWallets and passkeySupported as they persist
         }),
 
@@ -84,13 +95,12 @@ export const useWalletStore = create<WalletStore>()(
           savedWallets: state.savedWallets,
           activeWallet: state.activeWallet,
           passkeySupported: state.passkeySupported,
+          walletConfig: {
+            walletType: state.walletConfig.walletType,
+            // Don't persist private key for security
+            privateKey: undefined,
+          },
         }),
-        // Restore walletAddress from activeWallet after hydration
-        onRehydrateStorage: () => (state) => {
-          if (state?.activeWallet?.address && !state.walletAddress) {
-            state.walletAddress = state.activeWallet.address;
-          }
-        },
       }
     ),
     { name: 'wallet-store' }
@@ -103,11 +113,13 @@ export const useWalletState = () => useWalletStore(useShallow((state) => ({
   savedWallets: state.savedWallets,
   activeWallet: state.activeWallet,
   passkeySupported: state.passkeySupported,
+  walletConfig: state.walletConfig,
   isConnected: !!state.walletAddress,
   setWalletAddress: state.setWalletAddress,
   setSavedWallets: state.setSavedWallets,
   setActiveWallet: state.setActiveWallet,
   setPasskeySupported: state.setPasskeySupported,
+  setWalletConfig: state.setWalletConfig,
   addWallet: state.addWallet,
   removeWallet: state.removeWallet,
   clearWalletData: state.clearWalletData,
@@ -120,6 +132,7 @@ export const useIsConnected = () => useWalletStore(state => !!state.walletAddres
 export const useSavedWallets = () => useWalletStore(state => state.savedWallets);
 export const useActiveWallet = () => useWalletStore(state => state.activeWallet);
 export const usePasskeySupported = () => useWalletStore(state => state.passkeySupported);
+export const useWalletConfig = () => useWalletStore(state => state.walletConfig);
 
 // Action selectors
 export const useWalletActions = () => useWalletStore(useShallow((state) => ({
@@ -127,6 +140,7 @@ export const useWalletActions = () => useWalletStore(useShallow((state) => ({
   setSavedWallets: state.setSavedWallets,
   setActiveWallet: state.setActiveWallet,
   setPasskeySupported: state.setPasskeySupported,
+  setWalletConfig: state.setWalletConfig,
   addWallet: state.addWallet,
   removeWallet: state.removeWallet,
   clearWalletData: state.clearWalletData,

@@ -392,10 +392,6 @@ class SessionManager {
       this.currentSession = null;
     }
 
-    // DON'T remove sessionStorage here - let it persist for page refresh
-    // Only clear memory-based session data
-    // sessionStorage will be cleaned up when browser closes
-
     // Notify all lock callbacks
     this.lockCallbacks.forEach(callback => {
       try {

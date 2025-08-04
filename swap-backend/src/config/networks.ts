@@ -87,6 +87,13 @@ export const COMMON_TOKENS: Record<string, Token[]> = {
       address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2', 
       decimals: 6,
       logoURI: 'https://assets.coingecko.com/coins/images/325/small/Tether-logo.png'
+    },
+    {
+      symbol: 'ZORA',
+      name: 'Zora',
+      address: '0x1111111111166b7FE7bd91427724B487980aFc69',
+      decimals: 18,
+      logoURI: 'https://assets.coingecko.com/coins/images/54693/standard/zora.jpg'
     }
   ]
   // Templates cho networks khác:

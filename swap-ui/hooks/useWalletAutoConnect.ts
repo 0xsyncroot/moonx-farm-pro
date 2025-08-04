@@ -35,7 +35,6 @@ export const useWalletAutoConnect = (): AutoConnectResult => {
         if (!sessionManager.hasValidStoredSession()) {
           return;
         }
-
         // Load active wallet address from storage
         const activeWalletAddress = getActiveWallet();
         if (!activeWalletAddress) {

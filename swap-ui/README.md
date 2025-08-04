@@ -292,6 +292,294 @@ const GoodComponent = () => {
 };
 ```
 
+## Core Architecture & Flows
+
+### 🔄 **Dual Wallet System**
+
+The dapp supports two distinct wallet types with different connection flows:
+
+#### **1. Privy Wallets (External)**
+- **Types**: MetaMask, Rabby, OKX, WalletConnect, Coinbase, etc.
+- **Authentication**: Via Privy social login (email, Google, Discord)
+- **Connection**: Privy manages wallet detection and connection
+- **Signing**: Direct browser wallet signing
+- **Auto-Connect**: Privy handles session restoration
+
+```typescript
+// Privy Wallet Flow
+const { authenticated, user, connectWallet } = usePrivy();
+const { wallets } = useWallets();
+
+// Auto-connect on page load
+if (authenticated && wallets.length > 0) {
+  // Wallet automatically available through Privy
+}
+
+// Manual connection
+await connectWallet(); // Opens Privy modal
+```
+
+#### **2. Private Key Wallets (Internal)**
+- **Types**: Raw private key, Generated wallet, Imported wallet
+- **Authentication**: Passkey (biometric) or device encryption
+- **Connection**: Manual private key input or generation
+- **Signing**: Internal ethers.js signer with encrypted key
+- **Auto-Connect**: Session-based restoration with security verification
+
+```typescript
+// Private Key Wallet Flow
+import { sessionManager, secureSigner } from '@/libs';
+
+// Manual connection
+await sessionManager.createSession(privateKey, { timeout: 480 }); // 8 hours
+
+// Auto-connect on page load
+if (secureSigner.hasActiveSession()) {
+  const signer = await secureSigner.createProviderWallet(provider);
+  // Ready to use
+}
+```
+
+### 🎯 **Unified Wallet State Management**
+
+Both wallet types are managed through a unified state system:
+
+```typescript
+// Single source of truth for wallet state
+const {
+  walletAddress,        // Current wallet address (from Zustand store)
+  isConnected,          // Connection status (from Zustand store)
+  currentWalletType,    // 'privy' | 'private' | null (computed)
+  createWalletConfig    // Creates config for transactions
+} = useUnifiedWalletState();
+
+// Wallet type detection
+const getWalletType = (): 'privy' | 'private' | null => {
+  if (authenticated && user) return 'privy';           // Privy active
+  if (secureSigner.hasActiveSession()) return 'private'; // Session active
+  return null;                                         // Not connected
+};
+```
+
+### ⛽ **Gas Estimation Strategy**
+
+Smart 3-tier gas estimation system that works for both wallet types:
+
+```typescript
+// GasService.prepareTransactionParams()
+let finalGasLimit: bigint;
+
+if (estimatedGas) {
+  // 1. Use provided estimate (highest priority)
+  finalGasLimit = BigInt(estimatedGas);
+} else if (populatedTx.gasLimit) {
+  // 2. Use populated gas limit (works for private key wallets)
+  finalGasLimit = BigInt(populatedTx.gasLimit.toString());
+} else {
+  // 3. Auto-estimate gas (fallback for EOA wallets)
+  console.log('⛽ Auto-estimating gas as populateTransaction returned undefined gasLimit');
+  const estimatedGasLimit = await provider.estimateGas({
+    ...baseTxRequest,
+    from: await signer.getAddress()
+  });
+  finalGasLimit = BigInt(estimatedGasLimit.toString());
+}
+
+// Apply safety buffer + user boost
+const safetyMultiplier = 1.5; // 50% buffer
+const userBoostMultiplier = 1 + (gasSettings.gasLimitBoost / 100);
+finalGasLimit = BigInt(Math.floor(Number(finalGasLimit) * safetyMultiplier * userBoostMultiplier));
+```
+
+**Why 3-tier system needed:**
+- **Private Key Wallets**: `populateTransaction()` returns valid `gasLimit`
+- **EOA/Privy Wallets**: `populateTransaction()` may return `undefined gasLimit`
+- **Fallback**: Auto-estimation ensures all wallet types work
+
+### 🚀 **Auto-Connect Flow**
+
+Automatic wallet reconnection on page load:
+
+```typescript
+// useAppInitialization.ts
+const useAppInitialization = () => {
+  useEffect(() => {
+    const initializeApp = async () => {
+      // 1. Load networks first
+      await loadNetworks();
+      
+      // 2. Attempt auto-connect for private key wallets
+      const autoConnectResult = await attemptAutoConnect();
+      
+      // 3. Privy auto-connect handled automatically by Privy provider
+      setInitialized(true);
+    };
+    
+    initializeApp();
+  }, []);
+};
+
+// Private key auto-connect
+const attemptAutoConnect = async () => {
+  if (secureSigner.hasActiveSession()) {
+    const activeWalletData = secureSigner.getActiveWallet();
+    if (activeWalletData?.address) {
+      // Restore wallet state
+      store.setWalletAddress(activeWalletData.address);
+      return { success: true, walletType: 'private' };
+    }
+  }
+  return { success: false };
+};
+```
+
+### 🔧 **Transaction Execution Flow**
+
+Unified transaction flow for both wallet types:
+
+```typescript
+// SwapService.executeSwap()
+const executeSwap = async (params) => {
+  // 1. Create wallet provider with full config
+  const provider = createWalletProvider(params.walletConfig);
+  
+  // 2. Initialize signer (handles both wallet types)
+  await provider.initializeSigner();
+  const signer = provider.getSigner();
+  
+  // 3. Handle token approval (if needed)
+  if (needsApproval) {
+    const approvalTx = await gasService.prepareTransactionParams(
+      signer, approvalData, gasSettings
+    ); // Auto gas estimation
+    await signer.sendTransaction(approvalTx);
+  }
+  
+  // 4. Execute swap transaction
+  const swapTx = await gasService.prepareTransactionParams(
+    signer, swapData, gasSettings
+  ); // Auto gas estimation
+  
+  const txHash = await signer.sendTransaction(swapTx);
+  return { success: true, txHash };
+};
+```
+
+### 🔐 **Security Model**
+
+**Private Key Wallets:**
+```typescript
+// Session-based security with auto-lock
+const sessionConfig = {
+  sessionTimeout: 480,          // 8 hours max session
+  activityTimeout: 15,          // 15 min inactivity lock
+  lockOnBrowserClose: true,     // Lock on browser close
+  lockOnTabHidden: false,       // Don't lock on tab switch
+};
+
+// Private keys NEVER stored in plain text
+✅ Encrypted with session-specific AES-256 keys
+✅ Session keys stored in memory only
+✅ Auto-cleanup on browser events
+✅ Passkey authentication for decryption
+```
+
+**Privy Wallets:**
+```typescript
+// Managed by Privy with enterprise security
+✅ Social authentication (email, Google, Discord)
+✅ Secure wallet key management
+✅ Cross-device synchronization
+✅ Enterprise-grade infrastructure
+```
+
+### 🎯 **Wallet Config Creation**
+
+Unified config creation for transaction execution:
+
+```typescript
+// useUnifiedWalletState.createWalletConfig()
+const createWalletConfig = (rpcSettings, walletType, chainId) => ({
+  rpcSettings,
+  walletType,
+  chainId,
+  // Include Privy context ONLY for Privy wallets
+  ...(walletType === 'privy' && {
+    privyWallets: privyWallets,
+    privyAuthenticated: privyAuthenticated,
+    privyUser: privyUser,
+    activeWalletInstance: privyWallets[0] || null,
+  })
+  // Private key wallets don't need additional context
+});
+
+// Usage in swap execution
+const walletConfig = createWalletConfig(
+  effectiveRpcSettings, 
+  currentWalletType, 
+  selectedNetwork.chainId
+);
+```
+
+### 📊 **State Architecture**
+
+**Single Source of Truth:**
+```typescript
+// Core wallet state (Zustand store)
+const walletState = {
+  walletAddress: string | null,    // SSOT for current address
+  isConnected: boolean,            // SSOT for connection status
+  walletConfig: WalletConfig,      // Wallet-specific config
+  savedWallets: SavedWallet[],     // Saved private key wallets
+  activeWallet: SavedWallet | null // Currently active saved wallet
+};
+
+// Derived state (computed from core state + external sources)
+const derivedState = {
+  currentWalletType: 'privy' | 'private' | null, // Computed
+  privyWallets: Wallet[],                         // From Privy hooks
+  hasActiveSession: boolean,                      // From sessionManager
+};
+```
+
+**Store Hydration:**
+```typescript
+// Prevent false positive connection state
+onRehydrateStorage: () => (state) => {
+  // Only restore non-sensitive persistent data
+  // walletAddress will be set by auto-connect after session verification
+  // This prevents showing "connected" when session is actually expired
+};
+```
+
+### 🔄 **Component Integration**
+
+**Clean usage pattern:**
+```typescript
+const Header = () => {
+  // Single hook provides all wallet state
+  const {
+    walletAddress,      // Direct from store (SSOT)
+    isConnected,        // Direct from store (SSOT)
+    currentWalletType,  // Computed helper
+    disconnectPrivy     // Privy logout function
+  } = useUnifiedWalletState();
+  
+  // Display logic based on actual wallet type
+  const getWalletType = () => {
+    return currentWalletType === 'private' ? 'PRK' : 'EOA';
+  };
+  
+  const handleDisconnect = async () => {
+    if (currentWalletType === 'privy') {
+      await disconnectPrivy(); // Privy logout
+    } else {
+      lockWallet();           // Lock private key session
+    }
+  };
+};
+```
+
 ## Architecture
 
 ### 🏗️ **Clean Architecture Pattern**

@@ -33,7 +33,6 @@ export interface SwapExecutionParams {
   userAddress: string;
   rpcSettings: RPCSettings;
   walletConfig: WalletProviderConfig;
-  getWalletType: () => string | null;
   gasSettings: GasSettings; // Required - no fallbacks
 }
 
@@ -48,7 +47,6 @@ export interface DirectSwapParams {
   refFee?: number; // Referral fee in basis points
   rpcSettings: RPCSettings;
   walletConfig: WalletProviderConfig;
-  getWalletType: () => string | null;
   gasSettings: GasSettings;
 }
 

@@ -2,17 +2,16 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { networkService, type NetworkServiceResult } from '@/services';
-import type { Network, RPCSettings, WalletConfig } from '@/types/api';
+import type { Network, RPCSettings } from '@/types/api';
 
 // Re-export types for convenience
-export type { RPCSettings, WalletConfig } from '@/types/api';
+export type { RPCSettings } from '@/types/api';
 
 // Network state
 interface NetworkState {
   networks: Network[];
   selectedNetwork: Network | null;
   rpcSettings: RPCSettings;
-  walletConfig: WalletConfig;
 }
 
 // Network actions
@@ -20,7 +19,6 @@ interface NetworkActions {
   setNetworks: (networks: Network[]) => void;
   setSelectedNetwork: (network: Network | null) => void;
   setRpcSettings: (settings: RPCSettings) => void;
-  setWalletConfig: (config: WalletConfig) => void;
   loadNetworks: () => Promise<void>;
   resetNetworkState: () => void;
 }
@@ -35,10 +33,6 @@ const initialState: NetworkState = {
     customRpcUrl: undefined,
     useCustomRpc: false,
   },
-  walletConfig: {
-    walletType: 'privy',
-    privateKey: undefined,
-  },
 };
 
 export const useNetworkStore = create<NetworkStore>()(
@@ -51,7 +45,6 @@ export const useNetworkStore = create<NetworkStore>()(
         setNetworks: (networks) => set({ networks }),
         setSelectedNetwork: (selectedNetwork) => set({ selectedNetwork }),
         setRpcSettings: (rpcSettings) => set({ rpcSettings }),
-        setWalletConfig: (walletConfig) => set({ walletConfig }),
 
         // Load networks using NetworkService
         loadNetworks: async () => {
@@ -94,11 +87,6 @@ export const useNetworkStore = create<NetworkStore>()(
         // Only persist settings that should survive page refresh
         partialize: (state) => ({
           rpcSettings: state.rpcSettings,
-          walletConfig: {
-            walletType: state.walletConfig.walletType,
-            // Don't persist private key for security
-            privateKey: undefined,
-          },
           selectedNetwork: state.selectedNetwork,
         }),
       }
@@ -112,11 +100,9 @@ export const useNetworkState = () => useNetworkStore(useShallow((state) => ({
   networks: state.networks,
   selectedNetwork: state.selectedNetwork,
   rpcSettings: state.rpcSettings,
-  walletConfig: state.walletConfig,
   setNetworks: state.setNetworks,
   setSelectedNetwork: state.setSelectedNetwork,
   setRpcSettings: state.setRpcSettings,
-  setWalletConfig: state.setWalletConfig,
   loadNetworks: state.loadNetworks,
   resetNetworkState: state.resetNetworkState,
 })));
@@ -124,4 +110,3 @@ export const useNetworkState = () => useNetworkStore(useShallow((state) => ({
 export const useSelectedNetwork = () => useNetworkStore(state => state.selectedNetwork);
 export const useNetworks = () => useNetworkStore(state => state.networks);
 export const useRpcSettings = () => useNetworkStore(state => state.rpcSettings);
-export const useWalletConfig = () => useNetworkStore(state => state.walletConfig);

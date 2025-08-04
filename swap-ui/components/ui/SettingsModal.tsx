@@ -16,8 +16,8 @@ interface SettingsModalProps {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestartTutorial }) => {
-  const { rpcSettings, walletConfig, networks, setRpcSettings, setWalletConfig, loadNetworks } = useNetworkState();
-  const { passkeySupported, walletAddress, activeWallet, isConnected, savedWallets } = useWalletState();
+  const { rpcSettings, networks, setRpcSettings, loadNetworks } = useNetworkState();
+  const { passkeySupported, walletAddress, activeWallet, isConnected, savedWallets, walletConfig, setWalletConfig } = useWalletState();
   const { getSessionConfig, updateSessionConfig, resetSessionConfig, switchWallet } = useWallet();
   const toast = useToast();
   

@@ -33,10 +33,10 @@ export const useWallet = () => {
     addWallet,
     removeWallet,
     setPasskeySupported,
+    setWalletConfig,
   } = useWalletState();
 
   const { setLoading, setError, clearError } = useUIState();
-  const { setWalletConfig } = useNetworkState();
 
 
 

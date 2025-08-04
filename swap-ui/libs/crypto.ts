@@ -477,30 +477,32 @@ export function isSessionKeyValid(sessionKeyRef: string): boolean {
 
 // Device fingerprint - chỉ dùng yếu tố phần cứng ổn định
 function generateDeviceFingerprint(): string {
-  // Only run on client side
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return CryptoJS.lib.WordArray.random(16).toString(); // Fallback for SSR
+  if (typeof window === 'undefined') {
+    return 'ssr-' + CryptoJS.lib.WordArray.random(8).toString();
   }
 
-  // Chỉ dùng yếu tố phần cứng cơ bản và ổn định
-  const fingerprint = [
-    // Browser engine core (không phải full user agent)
-    navigator.userAgent.split(' ').slice(0, 2).join(' '), // Chỉ lấy browser engine
-    
-    // Hardware specs - ổn định theo device
-    navigator.hardwareConcurrency || 'unknown', // CPU cores
-    (navigator as any).deviceMemory || 'unknown', // RAM
-    screen.colorDepth, // Color capability
-    
-    // Basic browser capabilities - ít thay đổi
-    navigator.cookieEnabled ? 'cookies' : 'no-cookies',
-    typeof(Storage) !== "undefined" ? 'storage' : 'no-storage',
-    
-    // Static identifier để tránh collision
-    'moonx-device-v4'
-  ].join('|');
-  
-  return CryptoJS.SHA256(fingerprint).toString();
+  const STORAGE_KEY = 'moonx_device';
+  let uuid = '';
+
+  try {
+    uuid = localStorage.getItem(STORAGE_KEY) || '';
+    if (!uuid) {
+      uuid = crypto.randomUUID?.() || CryptoJS.lib.WordArray.random(16).toString();
+      localStorage.setItem(STORAGE_KEY, uuid);
+    }
+  } catch {
+    // Fallback khi không có localStorage
+    const fallback = [
+      navigator.userAgent,
+      navigator.language,
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      navigator.languages?.join(',') || '',
+    ].join('|');
+
+    uuid = CryptoJS.SHA256(fallback).toString();
+  }
+
+  return CryptoJS.SHA256(uuid).toString();
 }
 
 // Generate secure encryption key
@@ -546,7 +548,7 @@ export async function encryptPrivateKey(privateKey: string, walletName: string, 
   } else {
     // Device-based encryption (reproducible)
     const deviceFingerprint = generateDeviceFingerprint();
-    baseKey = CryptoJS.SHA256(deviceFingerprint + 'moonx-device-v3').toString();
+    baseKey = CryptoJS.SHA256(deviceFingerprint + 'moonx-device-v4').toString();
     credentialId = 'device_' + CryptoJS.lib.WordArray.random(8).toString();
     publicKey = baseKey; // Store full baseKey for reproducible decryption
   }

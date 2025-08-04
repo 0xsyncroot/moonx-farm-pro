@@ -6,7 +6,7 @@ import {
   useWalletState,
   useTokenState 
 } from '@/stores';
-import { useUnifiedWallet } from '@/libs/wallet-provider';
+import { useUnifiedWalletState } from './useUnifiedWalletState';
 import { tokenService } from '@/services';
 import type { TokenBalance } from '@/types/api';
 
@@ -28,9 +28,13 @@ export const useSwap = () => {
     setQuote,
   } = useSwapState();
   
-  const { walletAddress } = useWalletState();
   const { setError, clearError, setLoading } = useUIState();
-  const { privyAuthenticated, getWalletType, createWalletConfig } = useUnifiedWallet();
+  const { 
+    walletAddress, 
+    privyAuthenticated, 
+    currentWalletType,
+    createWalletConfig 
+  } = useUnifiedWalletState();
   
   const quoteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const quoteRefreshRef = useRef<NodeJS.Timeout | null>(null);
@@ -102,7 +106,6 @@ export const useSwap = () => {
     }
 
     // Additional check for Privy authentication
-    const currentWalletType = getWalletType();
     if (currentWalletType === 'privy' && !privyAuthenticated) {
       return; // Skip if Privy not authenticated
     }
@@ -148,7 +151,7 @@ export const useSwap = () => {
         clearTimeout(quoteTimeoutRef.current);
       }
     };
-  }, [swapForm.fromToken, swapForm.toToken, swapForm.fromAmount, walletAddress, selectedNetwork, getWalletType, privyAuthenticated, getSwapQuote]);
+  }, [swapForm.fromToken, swapForm.toToken, swapForm.fromAmount, walletAddress, selectedNetwork, currentWalletType, privyAuthenticated, getSwapQuote]);
 
   // ✅ AUTO-REFRESH QUOTE - Like Uniswap (every 15 seconds)
   useEffect(() => {
@@ -311,7 +314,6 @@ export const useSwap = () => {
       customRpcUrl: rpcSettings.customRpcUrl
     };
     
-    const currentWalletType = getWalletType();
     const walletType = (currentWalletType === 'privy' || currentWalletType === 'private') 
       ? currentWalletType 
       : 'privy'; // Default to privy for backward compatibility
@@ -327,7 +329,6 @@ export const useSwap = () => {
       userAddress: walletAddress,
       rpcSettings: effectiveRpcSettings,
       walletConfig,
-      getWalletType,
       gasSettings, // Add gas settings to swap execution
     });
 
@@ -347,7 +348,8 @@ export const useSwap = () => {
     swapForm, 
     walletAddress, 
     selectedNetwork, 
-    getWalletType, 
+    currentWalletType, 
+    createWalletConfig,
     refreshSpecificTokens, 
     setError
   ]);

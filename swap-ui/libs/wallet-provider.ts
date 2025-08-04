@@ -150,13 +150,14 @@ export class UnifiedWalletProvider {
       if (externalWallets.length === 0) {
         throw new Error('No external wallets connected through Privy. Please connect a wallet first.');
       }
-      
       // Use active wallet instance if available, otherwise get first external wallet
-      const activeWallet = this.config.activeWalletInstance || externalWallets[0];
-      
+      const activeWallet = this.config.activeWalletInstance || externalWallets.find(async wallet => await wallet.isConnected());
       try {
         // Get chainId from config (from selectedNetwork)
-        const chainId = this.config.chainId || 1; // Default to mainnet if not provided
+        const chainId = this.config.chainId // Default to mainnet if not provided
+        if (!chainId) {
+          throw new Error('No chainId provided');
+        }
         
         // Switch chain if needed (Privy handles this properly)
         if (activeWallet.chainId !== `eip155:${chainId}` && activeWallet.chainId !== `${chainId}`) {

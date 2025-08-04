@@ -4,17 +4,26 @@ import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
 import { Wallet, ChevronDown, Settings, LogOut, Copy, Eye, EyeOff, AlertTriangle, BookOpen } from 'lucide-react';
 import { Button, SettingsModal, useToast } from '@/components/ui';
-import { useWalletState, useUIState, useNetworkState } from '@/stores';
+import { useUIState, useNetworkState } from '@/stores';
 import { useTutorialActions } from '@/stores/useUIStore';
-import { usePrivy } from '@privy-io/react-auth';
+
 import { useWallet } from '@/hooks/useWallet';
+import { useUnifiedWalletState } from '@/hooks/useUnifiedWalletState';
 
 const Header: React.FC = () => {
-  const { walletAddress, isConnected, setWalletAddress } = useWalletState();
+  const { 
+    walletAddress, 
+    isConnected, 
+    setWalletAddress, 
+    walletConfig, 
+    setWalletConfig,
+    currentWalletType,
+    disconnectPrivy 
+  } = useUnifiedWalletState();
   const { openWalletModal } = useUIState();
-  const { selectedNetwork, networks, walletConfig, setWalletConfig } = useNetworkState();
+  const { selectedNetwork, networks } = useNetworkState();
   const { startTutorial, setFirstTimeUser } = useTutorialActions();
-  const { logout: privyLogout } = usePrivy();
+
   const { getPrivateKey, disconnectWallet, clearAllWalletDataCompletely } = useWallet();
   const toast = useToast();
 
@@ -49,11 +58,11 @@ const Header: React.FC = () => {
   };
 
   const getWalletType = () => {
-    return walletConfig.walletType === 'private' ? 'PRK' : 'EOA';
+    return currentWalletType === 'private' ? 'PRK' : 'EOA';
   };
 
   const getWalletTypeName = () => {
-    return walletConfig.walletType === 'private' ? 'Private Key' : 'External Wallet';
+    return currentWalletType === 'private' ? 'Private Key' : 'External Wallet';
   };
 
   const copyAddress = async () => {
@@ -76,7 +85,7 @@ const Header: React.FC = () => {
 
   const confirmDisconnect = async () => {
     try {
-      if (walletConfig.walletType === 'private') {
+      if (currentWalletType === 'private') {
         // 🔒 SECURE: Complete cleanup for private key wallets
         // This removes ONLY the active wallet connection but keeps saved wallets
         disconnectWallet();
@@ -85,7 +94,7 @@ const Header: React.FC = () => {
         // 🔒 SECURE: Complete cleanup for Privy wallets
         try {
           // Logout from Privy (clears Privy session, cookies, etc.)
-          await privyLogout();
+          await disconnectPrivy();
         } catch (privyError) {
           // Handle Privy logout error gracefully
           console.warn('Privy logout failed, continuing with local cleanup:', privyError);
@@ -129,7 +138,7 @@ const Header: React.FC = () => {
 
   // 🔐 SECURE: Authenticate and get private key
   const authenticateAndShowPrivateKey = async () => {
-    if (walletConfig.walletType !== 'private') {
+    if (currentWalletType !== 'private') {
       setAuthError('Private key not available for this wallet type');
       toast.error('Authentication Failed', 'Private key not available for this wallet type');
       return;
@@ -321,7 +330,7 @@ const Header: React.FC = () => {
                         </button>
 
                         {/* Show Private Key (only for private key wallets) */}
-                        {walletConfig.walletType === 'private' && (
+                        {currentWalletType === 'private' && (
                           <button
                             onClick={showPrivateKeyWarning}
                             className="w-full flex items-center space-x-3 px-3 py-2.5 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-all duration-200"
@@ -382,7 +391,7 @@ const Header: React.FC = () => {
               </div>
             </div>
             
-            {walletConfig.walletType === 'private' && (
+            {currentWalletType === 'private' && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4">
                 <div className="flex items-start space-x-3">
                   <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
@@ -406,7 +415,7 @@ const Header: React.FC = () => {
                 Cancel
               </Button>
               
-              {walletConfig.walletType === 'private' ? (
+              {currentWalletType === 'private' ? (
                 <>
                   <Button
                     onClick={confirmDisconnect}

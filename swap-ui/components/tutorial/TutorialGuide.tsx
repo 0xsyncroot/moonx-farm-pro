@@ -8,6 +8,34 @@ import TutorialOverlay from './TutorialOverlay';
 const TUTORIAL_STORAGE_KEY = 'moonx-tutorial-completed';
 const TUTORIAL_PROGRESS_KEY = 'moonx-tutorial-progress';
 
+// Safe localStorage utilities for SSR compatibility
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      console.warn('Failed to set localStorage:', error);
+    }
+  },
+  removeItem: (key: string): void => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn('Failed to remove localStorage:', error);
+    }
+  }
+};
+
 interface TutorialStep {
   id: string;
   title: string;
@@ -70,7 +98,7 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
   // Load tutorial progress from localStorage
   const loadTutorialProgress = (): TutorialProgress => {
     try {
-      const saved = localStorage.getItem(TUTORIAL_PROGRESS_KEY);
+      const saved = safeLocalStorage.getItem(TUTORIAL_PROGRESS_KEY);
       if (saved) {
         return JSON.parse(saved);
       }
@@ -88,7 +116,7 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
   // Save tutorial progress to localStorage
   const saveTutorialProgress = (progress: TutorialProgress) => {
     try {
-      localStorage.setItem(TUTORIAL_PROGRESS_KEY, JSON.stringify(progress));
+      safeLocalStorage.setItem(TUTORIAL_PROGRESS_KEY, JSON.stringify(progress));
     } catch (error) {
       console.warn('Failed to save tutorial progress:', error);
     }
@@ -98,7 +126,7 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
   useEffect(() => {
     if (hasInitialized) return;
 
-    const hasCompletedTutorial = localStorage.getItem(TUTORIAL_STORAGE_KEY) === 'true';
+    const hasCompletedTutorial = safeLocalStorage.getItem(TUTORIAL_STORAGE_KEY) === 'true';
     
     if (!hasCompletedTutorial) {
       const progress = loadTutorialProgress();
@@ -286,8 +314,8 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
     if (tutorial.currentStepIndex === tutorialSteps.length - 1) {
       // Last step - end tutorial
       endTutorial();
-      localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
-      localStorage.removeItem(TUTORIAL_PROGRESS_KEY); // Clean up progress
+              safeLocalStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+        safeLocalStorage.removeItem(TUTORIAL_PROGRESS_KEY); // Clean up progress
     } else {
       // Move to next step
       nextTutorialStep();
@@ -311,15 +339,15 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
     if (tutorialStep?.required) {
       // Required step - end tutorial
       endTutorial();
-      localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
-      localStorage.removeItem(TUTORIAL_PROGRESS_KEY);
+      safeLocalStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+      safeLocalStorage.removeItem(TUTORIAL_PROGRESS_KEY);
     } else {
       // Optional step - skip to next
       skipTutorialStep();
       if (tutorial.currentStepIndex === tutorialSteps.length - 1) {
         endTutorial();
-        localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
-        localStorage.removeItem(TUTORIAL_PROGRESS_KEY);
+        safeLocalStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+        safeLocalStorage.removeItem(TUTORIAL_PROGRESS_KEY);
       } else {
         nextTutorialStep();
       }
@@ -328,8 +356,8 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
 
   const handleClose = () => {
     endTutorial();
-    localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
-    localStorage.removeItem(TUTORIAL_PROGRESS_KEY);
+    safeLocalStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
+    safeLocalStorage.removeItem(TUTORIAL_PROGRESS_KEY);
   };
 
   const currentStep = tutorialSteps[tutorial.currentStepIndex];
@@ -344,7 +372,7 @@ const TutorialGuide: React.FC<TutorialGuideProps> = ({ children }) => {
     'hasInitialized': hasInitialized,
     'tutorial.currentStepIndex': tutorial.currentStepIndex,
     'isActive': isActive,
-    'hasCompletedTutorial': localStorage.getItem(TUTORIAL_STORAGE_KEY),
+    'hasCompletedTutorial': safeLocalStorage.getItem(TUTORIAL_STORAGE_KEY),
     'progress': loadTutorialProgress()
   });
 
