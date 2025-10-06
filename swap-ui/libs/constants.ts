@@ -1,17 +1,5 @@
-// Network constants - Real configurations, no mock data
-export const BASE_NETWORK = {
-  name: 'Base',
-  chainId: 8453,
-  rpc: 'https://mainnet.base.org',
-  currency: 'ETH',
-  multicall3Address: '0xcA11bde05977b3631167028862bE2a173976CA11',
-  blockExplorerUrl: 'https://basescan.org',
-};
-
-export const SUPPORTED_NETWORKS = [
-  BASE_NETWORK,
-  // Other networks can be added here as needed
-];
+// Network constants are now managed by NetworkService
+// This file only contains API endpoints and error messages
 
 // API endpoints - Real backend integration
 export const API_ENDPOINTS = {
@@ -42,8 +30,6 @@ export const DEFAULT_TOKENS = {
 };
 
 export default {
-  BASE_NETWORK,
-  SUPPORTED_NETWORKS,
   API_ENDPOINTS,
   ERROR_MESSAGES,
   DEFAULT_TOKENS,

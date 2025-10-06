@@ -9,6 +9,7 @@ import { useTutorialActions } from '@/stores/useUIStore';
 
 import { useWallet } from '@/hooks/useWallet';
 import { useUnifiedWalletState } from '@/hooks/useUnifiedWalletState';
+import type { Network } from '@/types/api';
 
 const Header: React.FC = () => {
   const { 
@@ -21,7 +22,7 @@ const Header: React.FC = () => {
     disconnectPrivy 
   } = useUnifiedWalletState();
   const { openWalletModal } = useUIState();
-  const { selectedNetwork, networks } = useNetworkState();
+  const { selectedNetwork, networks, setSelectedNetwork } = useNetworkState();
   const { startTutorial, setFirstTimeUser } = useTutorialActions();
 
   const { getPrivateKey, disconnectWallet, clearAllWalletDataCompletely } = useWallet();
@@ -35,22 +36,28 @@ const Header: React.FC = () => {
   const [currentPrivateKey, setCurrentPrivateKey] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [showNetworkDropdown, setShowNetworkDropdown] = useState(false);
+  const [isNetworkSwitching, setIsNetworkSwitching] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const networkDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowWalletDropdown(false);
       }
+      if (networkDropdownRef.current && !networkDropdownRef.current.contains(event.target as Node)) {
+        setShowNetworkDropdown(false);
+      }
     };
 
-    if (showWalletDropdown) {
+    if (showWalletDropdown || showNetworkDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showWalletDropdown]);
+  }, [showWalletDropdown, showNetworkDropdown]);
 
   const formatAddress = (address: string) => {
     if (!address) return 'Invalid Address';
@@ -185,6 +192,33 @@ const Header: React.FC = () => {
     toast.success('Tutorial Restarted!', 'The guided tour will begin shortly');
   };
 
+  // Handle network switching
+  const handleNetworkSwitch = async (network: Network) => {
+    if (network.id === selectedNetwork?.id) {
+      setShowNetworkDropdown(false);
+      return;
+    }
+
+    setIsNetworkSwitching(true);
+    try {
+      // Update selected network in store
+      setSelectedNetwork(network);
+      setShowNetworkDropdown(false);
+      toast.success('Network Switched!', `Successfully switched to ${network.name}`);
+    } catch (error) {
+      console.error('Failed to switch network:', error);
+      toast.error('Network Switch Failed', 'Could not switch to the selected network');
+    } finally {
+      setIsNetworkSwitching(false);
+    }
+  };
+
+  // Toggle network dropdown
+  const toggleNetworkDropdown = () => {
+    // Always allow dropdown to show current network info
+    setShowNetworkDropdown(!showNetworkDropdown);
+  };
+
   const tabs = [
     { id: 'swap', label: 'Swap', active: true, href: '/' },
     { id: 'pool', label: 'Pool', active: false, href: '#' },
@@ -233,7 +267,12 @@ const Header: React.FC = () => {
             {/* Right Side - Chain Selector & Wallet */}
             <div className="flex items-center space-x-3">
               {/* Chain Selector */}
-              <div className="flex items-center space-x-2 px-3 py-2 bg-gray-800/60 border border-gray-700 rounded-xl hover:bg-gray-800/80 hover:border-gray-600 transition-all cursor-pointer group">
+              <div className="relative" ref={networkDropdownRef}>
+                <button
+                  onClick={toggleNetworkDropdown}
+                  disabled={isNetworkSwitching}
+                  className="flex items-center space-x-2 px-3 py-2 bg-gray-800/60 border border-gray-700 rounded-xl hover:bg-gray-800/80 hover:border-gray-600 transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
+                >
                 <div className="w-5 h-5 rounded-full overflow-hidden">
                   {selectedNetwork ? (
                     selectedNetwork.logoUrl ? (
@@ -264,10 +303,100 @@ const Header: React.FC = () => {
                     <div className="w-full h-full bg-gray-600 rounded-full animate-pulse"></div>
                   )}
                 </div>
-                <span className="hidden sm:block text-sm text-white font-medium group-hover:text-gray-200">
-                  {selectedNetwork?.name || (networks.length > 0 ? 'No Network' : 'Loading...')}
-                </span>
-                <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-300" />
+                  <span className="hidden sm:block text-sm text-white font-medium group-hover:text-gray-200">
+                    {isNetworkSwitching ? 'Switching...' : (selectedNetwork?.name || (networks.length > 0 ? 'No Network' : 'Loading...'))}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 group-hover:text-gray-300 transition-transform ${showNetworkDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Network Selection Dropdown */}
+                {showNetworkDropdown && (
+                  <div className="absolute right-0 mt-2 w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 backdrop-blur-sm">
+                    {/* Header */}
+                    <div className="p-4 border-b border-gray-700 bg-gradient-to-r from-gray-800 to-gray-900">
+                      <div className="text-white font-semibold mb-1">
+                        {networks.length <= 1 ? 'Current Network' : 'Select Network'}
+                      </div>
+                      <div className="text-gray-400 text-xs">
+                        {networks.length <= 1 
+                          ? 'Currently connected blockchain network'
+                          : 'Switch to a different blockchain network'
+                        }
+                      </div>
+                    </div>
+                    
+                    {/* Network List */}
+                    <div className="p-2 max-h-80 overflow-y-auto">
+                      {networks.length === 0 ? (
+                        <div className="p-4 text-center text-gray-400">
+                          <div className="text-sm">No networks available</div>
+                          <div className="text-xs mt-1">Please check your connection</div>
+                        </div>
+                      ) : networks.length === 1 ? (
+                        <div className="p-3 mb-2 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                          <div className="text-blue-400 text-sm font-medium mb-1">Single Network Mode</div>
+                          <div className="text-blue-300 text-xs">
+                            Only one network is currently supported. More networks will be added soon.
+                          </div>
+                        </div>
+                      ) : null}
+                      
+                      {networks.map((network) => (
+                        <button
+                          key={network.id}
+                          onClick={() => handleNetworkSwitch(network)}
+                          disabled={isNetworkSwitching || network.id === selectedNetwork?.id}
+                          className={`w-full flex items-center space-x-3 px-3 py-3 rounded-lg transition-all duration-200 ${
+                            network.id === selectedNetwork?.id
+                              ? 'bg-gradient-to-r from-orange-500/20 to-orange-600/20 border border-orange-500/30 text-orange-400'
+                              : 'text-gray-300 hover:text-white hover:bg-gray-700/50 border border-transparent'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {/* Network Logo */}
+                          <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0">
+                            {network.logoUrl ? (
+                              <Image
+                                src={network.logoUrl}
+                                alt={`${network.name} logo`}
+                                width={24}
+                                height={24}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `<div class="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center"><span class="text-white text-xs font-bold">${network.name.charAt(0)}</span></div>`;
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                                <span className="text-white text-xs font-bold">
+                                  {network.name.charAt(0)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Network Info */}
+                          <div className="flex-1 text-left">
+                            <div className="font-medium text-sm">{network.name}</div>
+                            <div className="text-xs text-gray-400">Chain ID: {network.chainId}</div>
+                          </div>
+                          
+                          {/* Current Badge */}
+                          {network.id === selectedNetwork?.id && (
+                            <div className="flex items-center space-x-1 px-2 py-1 bg-orange-500/20 rounded-md">
+                              <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                              <span className="text-orange-400 text-xs font-medium">Current</span>
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Settings Button */}

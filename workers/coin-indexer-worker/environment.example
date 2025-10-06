@@ -1,0 +1,148 @@
+# ==============================================
+# MoonX Coin Indexer Worker - Environment Configuration
+# ==============================================
+
+# Copy this file to .env and update values for your environment
+# Specialized worker for indexing new coin creation events (CreatorCoin & Clanker)
+
+# -------------------------------------
+# Database Configuration
+# -------------------------------------
+# Local Development
+MOONX_COIN_MONGODB_URL=mongodb://localhost:27017
+MOONX_COIN_MONGODB_DATABASE=moonx_coin_indexer
+
+# Production with Authentication
+# MOONX_COIN_MONGODB_URL=mongodb://moonx_coin_user:secure_password_123@mongo-cluster:27017/moonx_coin_indexer?authSource=admin&ssl=true&replicaSet=rs0
+# MOONX_COIN_MONGODB_URL=mongodb+srv://moonx_user:password@cluster.mongodb.net/moonx_coin_indexer?retryWrites=true&w=majority
+
+# MongoDB Atlas / Cloud Examples
+# MOONX_COIN_MONGODB_URL=mongodb+srv://user:pass@cluster.abc123.mongodb.net/moonx_coin_indexer?retryWrites=true&w=majority
+# MOONX_COIN_MONGODB_URL=mongodb://user:pass@mongodb1:27017,mongodb2:27017,mongodb3:27017/moonx_coin_indexer?replicaSet=rs0&authSource=admin
+
+# -------------------------------------
+# Redis Configuration  
+# -------------------------------------
+# Local development (no password)
+MOONX_COIN_REDIS_URL=redis://localhost:6379
+
+# Production with password authentication
+# MOONX_COIN_REDIS_URL=redis://:your_redis_password@redis-server:6379
+# MOONX_COIN_REDIS_URL=redis://username:password@redis-server:6379
+
+# Redis Cloud / ElastiCache / MemoryDB examples  
+# MOONX_COIN_REDIS_URL=redis://:password@your-cluster.cache.amazonaws.com:6379
+# MOONX_COIN_REDIS_URL=rediss://:password@secure-redis.com:6380
+
+# Docker Compose Redis with password
+# MOONX_COIN_REDIS_URL=redis://:docker_redis_password@redis:6379
+
+MOONX_COIN_REDIS_DB=0
+MOONX_COIN_REDIS_KEY_PREFIX=moonx:coins
+
+# -------------------------------------
+# Worker Configuration
+# -------------------------------------
+MOONX_COIN_WORKER_INTERVAL_SECONDS=15  # How often to check for new blocks
+MOONX_COIN_WORKER_BATCH_SIZE=100       # Max tokens to process per batch
+MOONX_COIN_WORKER_MAX_RETRIES=3        # Max retries for failed operations
+MOONX_COIN_WORKER_RETRY_DELAY=30       # Seconds between retries
+
+# -------------------------------------
+# Blockchain Configuration
+# -------------------------------------
+MOONX_COIN_DEFAULT_CHAIN_ID=8453              # Base mainnet
+MOONX_COIN_MAX_BLOCKS_PER_REQUEST=2000        # Max blocks per RPC query
+
+# Note: RPC URLs are configured in config/chains/*.json files
+# This allows for round-robin load balancing and automatic failover
+
+# -------------------------------------
+# Lock Configuration
+# -------------------------------------
+MOONX_COIN_LOCK_TIMEOUT_SECONDS=300    # Redis lock timeout (5 minutes)
+MOONX_COIN_LOCK_RETRY_DELAY=5          # Seconds between lock attempts
+
+# -------------------------------------
+# Logging Configuration
+# -------------------------------------
+MOONX_COIN_LOG_LEVEL=INFO              # DEBUG, INFO, WARNING, ERROR
+MOONX_COIN_LOG_FORMAT=json             # json or console
+
+# Development logging (uncomment for local dev)
+# MOONX_COIN_LOG_LEVEL=DEBUG
+# MOONX_COIN_LOG_FORMAT=console
+
+# -------------------------------------
+# Kafka Configuration (Event Publishing)
+# -------------------------------------
+# Leave empty to disable Kafka publishing
+MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=
+MOONX_COIN_KAFKA_TOPIC_PREFIX=moonx
+MOONX_COIN_KAFKA_ENABLED=false
+
+# Production Kafka Examples
+# MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=kafka1:9092,kafka2:9092,kafka3:9092
+# MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+# MOONX_COIN_KAFKA_ENABLED=true
+
+# Kafka Cloud / Confluent Cloud
+# MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=pkc-xxx.region.provider.confluent.cloud:9092
+# Add SASL/SSL configs via additional env vars if needed
+
+# -------------------------------------
+# Performance Configuration (Multithreading & Parallel Processing)
+# -------------------------------------
+MOONX_COIN_ENABLE_DISTRIBUTED_PROCESSING=true  # Enable parallel processing
+MOONX_COIN_WORKER_POOL_SIZE=4                   # Worker thread pool size
+MOONX_COIN_MAX_CONCURRENT_CONTRACTS=4           # Max contracts processed in parallel
+MOONX_COIN_MAX_CONCURRENT_BLOCKS=3              # Max block ranges processed in parallel
+MOONX_COIN_DATABASE_BATCH_SIZE=100              # Batch size for DB operations
+MOONX_COIN_EVENT_PROCESSING_BATCH_SIZE=50       # Batch size for event processing
+
+# Optimized settings for high-throughput production
+# MOONX_COIN_WORKER_POOL_SIZE=8
+# MOONX_COIN_MAX_CONCURRENT_CONTRACTS=6
+# MOONX_COIN_MAX_CONCURRENT_BLOCKS=5
+# MOONX_COIN_EVENT_PROCESSING_BATCH_SIZE=100
+
+# -------------------------------------
+# Container/Cloud Deployment
+# -------------------------------------
+# For Docker Compose / Kubernetes deployment
+# MOONX_COIN_MONGODB_URL=mongodb://mongo:27017/moonx_coin_indexer
+# MOONX_COIN_REDIS_URL=redis://redis:6379
+# MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+
+# For AWS deployment  
+# MOONX_COIN_MONGODB_URL=mongodb+srv://user:pass@docdb-cluster.cluster-xxx.docdb.amazonaws.com:27017/moonx_coin_indexer?ssl=true&replicaSet=rs0&readPreference=secondaryPreferred
+# MOONX_COIN_REDIS_URL=rediss://elasticache-cluster.xxx.cache.amazonaws.com:6380
+# MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=kafka-cluster.xxx.amazonaws.com:9092
+
+# For GCP deployment
+# MOONX_COIN_MONGODB_URL=mongodb://user:pass@mongodb-cluster-ip:27017/moonx_coin_indexer
+# MOONX_COIN_REDIS_URL=redis://redis-memorystore-ip:6379
+
+# -------------------------------------
+# Security & Production Settings  
+# -------------------------------------
+# Recommended for production:
+# - Use strong passwords for MongoDB and Redis
+# - Enable SSL/TLS for all connections
+# - Use connection pooling and timeouts
+# - Monitor resource usage and set appropriate limits
+# - Enable proper logging and monitoring
+# - Use secrets management (K8s secrets, AWS Secrets Manager, etc.)
+
+# Example with SSL enabled:
+# MOONX_COIN_MONGODB_URL=mongodb://user:pass@host:27017/db?ssl=true&sslValidate=true&sslCA=/path/to/ca.pem
+# MOONX_COIN_REDIS_URL=rediss://user:pass@host:6380
+
+# -------------------------------------
+# Development Overrides
+# -------------------------------------
+# Uncomment these for local development:
+# MOONX_COIN_LOG_LEVEL=DEBUG
+# MOONX_COIN_LOG_FORMAT=console  
+# MOONX_COIN_WORKER_INTERVAL_SECONDS=30
+# MOONX_COIN_MAX_BLOCKS_PER_REQUEST=500

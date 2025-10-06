@@ -1,0 +1,62 @@
+{
+  "chain_id": 8453,
+  "name": "Base",
+  "rpc_urls": [
+    "https://lb.drpc.org/base/Ah-bl6_Plk0IpXXEnWybJ56q_BofcmMR8IaTIgaNGuYu",
+    "https://lb.drpc.org/base/Aj2O8B7XfUrvoq1ArWNFJ8bsXmYvcpIR8IakIgaNGuYu",
+    "https://lb.drpc.org/base/Alf1xdAdiEGSisHp_VQNCHXztKLEd0gR8InrIgaNGuYu",
+    "https://lb.drpc.org/base/AhmQlGad_0YMgcO9oeckW-bHRJlEd0oR8InsIgaNGuYu"
+  ],
+  "backup_rpc_urls": [
+    "https://base-mainnet.g.alchemy.com/v2/lX3z6nPqoEJs-G_L4zQEQ", 
+    "https://mainnet.base.org",
+    "https://base.blockpi.network/v1/rpc/public",
+    "https://1rpc.io/base",
+    "https://base.drpc.org",
+    "https://base-pokt.nodies.app"
+  ],
+  "block_time": 2,
+  "start_block": 34000000,
+  "confirmation_blocks": 5,
+  "max_block_range": 2000,
+  
+  "contracts": {
+    "creator_coin_factory": {
+      "address": "0x777777751622c0d3258f214f9df38e35bf45baf3",
+      "events": {
+        "CreatorCoinCreated": {
+          "signature": "0x74b670d628e152daa36ca95dda7cb0002d6ea7a37b55afe4593db7abd1515781",
+          "parser": "creator_coin_parser"
+        },
+        "CoinCreatedV4": {
+          "signature": "0x2de436107c2096e039c98bbcc3c5a2560583738ce15c234557eecb4d3221aa81",
+          "parser": "creator_coin_v4_parser"
+        }
+      }
+    },
+    "clanker_factory": {
+      "address": "0xe85a59c628f7d27878aceb4bf3b35733630083a9",
+      "events": {
+        "TokenCreated": {
+          "signature": "0x9299d1d1a88d8e1abdc591ae7a167a6bc63a8f17d695804e9091ee33aa89fb67",
+          "parser": "clanker_parser"
+        }
+      }
+    }
+  },
+  
+  "monitoring": {
+    "enabled": true,
+    "health_check_interval": 60,
+    "max_rpc_failures": 5,
+    "rpc_switch_threshold": 3
+  },
+  
+  "performance": {
+    "batch_size": 50,
+    "concurrent_requests": 5,
+    "request_timeout": 30,
+    "retry_attempts": 3,
+    "retry_delay": 2
+  }
+}

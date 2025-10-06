@@ -1,38 +1,54 @@
 import { 
   Token, 
   TokenBalance, 
-  SwapQuote, 
-  QuoteRequest, 
-  SwapRequest, 
   TokenSearchParams,
-  MoonXQuoteResult 
+  Network
 } from '../types';
 import { BlockchainRepository } from '../repositories/BlockchainRepository';
-import { getNetworkByChainId, getNetworkKeyByChainId, COMMON_TOKENS } from '../config/networks';
-import { formatBalance, parseAmount, isValidAddress, ETH_ADDRESS } from '../utils/contracts';
+import { getNetworkByChainIdSync, getNetworkKeyByChainIdSync, COMMON_TOKENS } from '../config/networks';
+import { isValidAddress, ETH_ADDRESS } from '../utils/contracts';
+import { poolCacheService } from '../utils/pool-cache';
+import { priceService } from '../utils/price-service';
 import { ethers } from 'ethers';
 
 export class SwapService {
   private blockchainRepository: BlockchainRepository;
+  private dbInitialized: boolean = false;
 
   constructor() {
     this.blockchainRepository = new BlockchainRepository();
+    this.initializeDatabase();
+  }
+
+  // Initialize database connections
+  private async initializeDatabase(): Promise<void> {
+    try {
+      await poolCacheService.initialize();
+      this.dbInitialized = true;
+      console.log('✅ Pool cache service initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize pool cache service:', error);
+      this.dbInitialized = false;
+    }
   }
 
   // Cleanup method for graceful shutdown
   async cleanup(): Promise<void> {
-    await this.blockchainRepository.cleanup();
+    await Promise.all([
+      this.blockchainRepository.cleanup(),
+      poolCacheService.cleanup()
+    ]);
   }
 
   // Get tokens with balances
   async getTokensWithBalances(params: TokenSearchParams): Promise<{ tokens: TokenBalance[] }> {
     try {
-      const network = getNetworkByChainId(params.chainId);
+      const network = getNetworkByChainIdSync(params.chainId);
       if (!network) {
         throw new Error('Unsupported network');
       }
 
-      const networkKey = getNetworkKeyByChainId(params.chainId);
+      const networkKey = getNetworkKeyByChainIdSync(params.chainId);
       if (!networkKey) {
         throw new Error('Network key not found');
       }
@@ -42,17 +58,15 @@ export class SwapService {
       // If search parameter provided, filter or fetch custom token
       if (params.search) {
         if (isValidAddress(params.search)) {
-          // Search is a token address - fetch token info
+          // Search is a token address - fetch token info and return only that token
           const customToken = await this.blockchainRepository.getTokenInfo(params.search, network);
           if (customToken) {
-            // Add to beginning of list if not already present
-            const exists = tokens.find(t => t.address.toLowerCase() === customToken.address.toLowerCase());
-            if (!exists) {
-              tokens = [customToken, ...tokens];
-            }
+            tokens = [customToken]; // Only return the searched token
+          } else {
+            tokens = []; // No token found for this address
           }
         } else {
-          // Search by symbol/name
+          // Search by symbol/name - filter existing tokens
           tokens = tokens.filter(token => 
             token.symbol.toLowerCase().includes(params.search!.toLowerCase()) ||
             token.name.toLowerCase().includes(params.search!.toLowerCase())
@@ -74,6 +88,23 @@ export class SwapService {
         }));
       }
 
+      // Fetch token prices concurrently
+      const tokenAddresses = tokens.map(token => token.address);
+      const prices = await priceService.getTokenPrices(tokenAddresses, params.chainId);
+
+      // Merge price information into tokens
+      tokenBalances.forEach(tokenBalance => {
+        const price = prices[tokenBalance.token.address.toLowerCase()];
+        if (price) {
+          tokenBalance.token.priceUsd = price.priceUsd;
+          tokenBalance.token.priceChange24h = price.priceChange24h;
+          tokenBalance.token.volume24h = price.volume24h;
+        }
+        
+        // Remove useBinance from response (internal use only)
+        delete tokenBalance.token.useBinance;
+      });
+
       return { tokens: tokenBalances };
     } catch (error) {
       console.error('Error in getTokensWithBalances:', error);
@@ -88,12 +119,12 @@ export class SwapService {
     tokenAddresses: string[];
   }): Promise<{ tokens: TokenBalance[] }> {
     try {
-      const network = getNetworkByChainId(params.chainId);
+      const network = getNetworkByChainIdSync(params.chainId);
       if (!network) {
         throw new Error('Unsupported network');
       }
 
-      const networkKey = getNetworkKeyByChainId(params.chainId);
+      const networkKey = getNetworkKeyByChainIdSync(params.chainId);
       if (!networkKey) {
         throw new Error('Network key not found');
       }
@@ -150,6 +181,23 @@ export class SwapService {
         network
       );
 
+      // Fetch token prices concurrently
+      const tokenAddresses = tokens.map(token => token.address);
+      const prices = await priceService.getTokenPrices(tokenAddresses, params.chainId);
+
+      // Merge price information into tokens
+      tokenBalances.forEach(tokenBalance => {
+        const price = prices[tokenBalance.token.address.toLowerCase()];
+        if (price) {
+          tokenBalance.token.priceUsd = price.priceUsd;
+          tokenBalance.token.priceChange24h = price.priceChange24h;
+          tokenBalance.token.volume24h = price.volume24h;
+        }
+        
+        // Remove useBinance from response (internal use only)
+        delete tokenBalance.token.useBinance;
+      });
+
       return { tokens: tokenBalances };
     } catch (error) {
       console.error('Error in getSpecificTokensWithBalances:', error);
@@ -175,14 +223,14 @@ export class SwapService {
     slippage: string;
     fee: string;
     platformFee: number;
-    calldata: string;
+    calldata: string | null;
     value: string;
     gasEstimate: string;
     route: string[];
     moonxQuote: any;
   }> {
     try {
-      const network = getNetworkByChainId(params.chainId);
+      const network = getNetworkByChainIdSync(params.chainId);
       if (!network) {
         throw new Error('Unsupported network');
       }
@@ -195,8 +243,41 @@ export class SwapService {
         network
       );
 
+      // If no quote available, return zero values instead of throwing error
       if (!moonxQuote || moonxQuote.amountOut === 0n) {
-        throw new Error('Insufficient liquidity for this trade');
+        const [fromToken, toToken] = await Promise.all([
+          this.blockchainRepository.getTokenInfo(params.fromTokenAddress, network),
+          this.blockchainRepository.getTokenInfo(params.toTokenAddress, network)
+        ]);
+
+        if (!fromToken || !toToken) {
+          throw new Error('Token information not found');
+        }
+
+        return {
+          fromToken,
+          toToken,
+          fromAmount: ethers.formatUnits(params.amount, fromToken.decimals),
+          toAmount: '0',
+          minToAmount: '0',
+          priceImpact: '0',
+          slippage: params.slippage.toString(),
+          fee: '0',
+          platformFee: 0,
+          calldata: null,
+          value: '0',
+          gasEstimate: '0',
+          route: [params.fromTokenAddress, params.toTokenAddress],
+          moonxQuote: {
+            amountOut: '0',
+            liquidity: '0',
+            fee: 0,
+            version: 0,
+            hooks: ethers.ZeroAddress,
+            path: [],
+            routeData: '0x'
+          }
+        };
       }
 
              // Get token info
@@ -249,14 +330,16 @@ export class SwapService {
         calldata,
         value,
         gasEstimate,
-        route: [params.fromTokenAddress, params.toTokenAddress], // Simplified route
+        route: (moonxQuote.path && moonxQuote.path.length > 0) 
+          ? moonxQuote.path 
+          : [params.fromTokenAddress, params.toTokenAddress],
         moonxQuote: {
           amountOut: moonxQuote.amountOut.toString(),
           liquidity: moonxQuote.liquidity.toString(),
           fee: moonxQuote.fee,
           version: moonxQuote.version,
           hooks: moonxQuote.hooks,
-          path: moonxQuote.path || '0x',
+          path: moonxQuote.path || [],
           routeData: moonxQuote.routeData || '0x'
         }
       };
@@ -266,7 +349,7 @@ export class SwapService {
     }
   }
 
-  // Build calldata for MoonX swap according to MoonX-Swap-Guide.md
+  // Build calldata for MoonX swap according to MoonX-Swap-Guide.md (NEW VERSION)
   private async buildSwapCalldata(params: {
     fromTokenAddress: string;
     toTokenAddress: string;
@@ -285,60 +368,133 @@ export class SwapService {
       // Convert slippage percentage to basis points (e.g., 0.5% -> 50 basis points)
       const slippageBasisPoints = Math.floor(params.slippage * 100);
 
-      // Build args array according to MoonX-Swap-Guide.md
-      const args = [];
-      
-      // args[0]: tokenIn
-      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["address"], [fromTokenAddress]));
-      
-      // args[1]: tokenOut  
-      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["address"], [toTokenAddress]));
-      
-      // args[2]: amountIn
-      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [params.fromAmount]));
-      
-      // args[3]: slippage (in basis points)
-      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [slippageBasisPoints]));
-      
-      // args[4]: refData (referral data) - according to MoonX-Swap-Guide.md
-      // Must include zero address and 0 fee even when no referral
-      const refDataArray: string[] = [];
-      refDataArray.push(ethers.AbiCoder.defaultAbiCoder().encode(["address"], [ethers.ZeroAddress])); // No specific referrer
-      refDataArray.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [0])); // No referral fee
-      const refData = ethers.AbiCoder.defaultAbiCoder().encode(["bytes[]"], [refDataArray]);
-      args.push(refData);
-      
-      // args[5]: version (from quote)
-      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint8"], [params.moonxQuote.version]));
-      
-      // args[6]: version-specific data (FROM QUOTE RESULT)
-      const version = Number(params.moonxQuote.version);
-      if (version === 2) {
-        // V2: use path from quote
-        const path = params.moonxQuote.path || [fromTokenAddress, toTokenAddress];
-        args.push(ethers.AbiCoder.defaultAbiCoder().encode(["address[]"], [path]));
-      } else if (version === 3) {
-        // V3: use fee from quote
-        args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint24"], [params.moonxQuote.fee || 3000]));
-      } else if (version === 4) {
-        // V4: use routeData from quote (ALREADY ENCODED)
-        if (params.moonxQuote.routeData && params.moonxQuote.routeData !== "0x") {
-          args.push(params.moonxQuote.routeData); // routeData is already encoded
-        } else {
-          args.push("0x"); // Empty bytes if no routeData
-        }
+      // Validate quote data
+      if (!params.moonxQuote || !params.moonxQuote.version) {
+        throw new Error('Invalid moonxQuote: missing version');
+      }
+      if (!params.moonxQuote.amountOut || params.moonxQuote.amountOut === '0' || params.moonxQuote.amountOut === 0n) {
+        throw new Error('Invalid moonxQuote: missing or zero amountOut');
       }
       
-      // args[7]: recipient
+      // Validate amounts
+      if (!params.fromAmount || params.fromAmount === '0') {
+        throw new Error('Invalid fromAmount: missing or zero');
+      }
+
+      // Build args array according to MoonX-Swap-Guide.md (9 structured args)
+      const args = [];
+      const version = Number(params.moonxQuote.version);
+
+      // args[0]: SwapRoute - Route information (build from quote result)
+      // According to MoonX-Swap-Guide.md: Build SwapRoute from quote result
+      const swapRoute = {
+        tokenIn: fromTokenAddress,
+        tokenOut: toTokenAddress,
+        version: version,
+        poolFee: Number(params.moonxQuote.fee) || 0,        // Direct from quote
+        path: params.moonxQuote.path || [],                 // Direct from quote
+        routeData: params.moonxQuote.routeData || "0x",     // Direct from quote
+        hookData: "0x"
+      };
+
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(
+        ["tuple(address,address,uint8,uint24,address[],bytes,bytes)"],
+        [[
+          swapRoute.tokenIn,
+          swapRoute.tokenOut,
+          swapRoute.version,
+          swapRoute.poolFee,
+          swapRoute.path,
+          swapRoute.routeData,
+          swapRoute.hookData
+        ]]
+      ));
+
+      // args[1]: recipient (optional - can be empty for msg.sender)
       args.push(ethers.AbiCoder.defaultAbiCoder().encode(["address"], [recipient]));
 
-      // MoonX execMoonXSwap function ABI (correct format from guide)
+      // args[2]: RefConfiguration - ALWAYS REQUIRED (no referral in this case)
+      const refConfig = {
+        refAddress: ethers.ZeroAddress, // No referral
+        refFee: 0 // No referral fee
+      };
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(
+        ["tuple(address,uint256)"],
+        [[refConfig.refAddress, refConfig.refFee]]
+      ));
+      
+      if (params.fromAmount.toString().includes('e') || params.fromAmount.toString().includes('E')) {
+        throw new Error(`Invalid amountIn format (scientific notation): ${params.fromAmount}`);
+      }
+      
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [params.fromAmount]));
+
+      // args[4]: amountOut (expected from quote) - handle BigInt properly
+      let expectedAmountOut: string;
+      if (typeof params.moonxQuote.amountOut === 'string') {
+        expectedAmountOut = params.moonxQuote.amountOut;
+      } else if (typeof params.moonxQuote.amountOut === 'bigint') {
+        expectedAmountOut = params.moonxQuote.amountOut.toString();
+      } else {
+        // Handle BigNumber or other types
+        expectedAmountOut = BigInt(params.moonxQuote.amountOut).toString();
+      }
+      
+      if (expectedAmountOut.includes('e') || expectedAmountOut.includes('E')) {
+        throw new Error(`Invalid amountOut format (scientific notation): ${expectedAmountOut}`);
+      }
+      
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [expectedAmountOut]));
+
+      // args[5]: slippage (user-provided slippage in basis points)
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["uint256"], [slippageBasisPoints]));
+
+      // args[6]: useProvidedQuote (true = use provided quote, false = fetch fresh)
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(["bool"], [true]));
+
+      // args[7]: PlatformConfig - Platform configuration
+      const platformConfig = {
+        gasOptimization: true,
+        mevProtection: false,
+        routeType: 0 // 0=best_price, 1=fastest, 2=safest
+      };
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(
+        ["tuple(bool,bool,uint8)"],
+        [[
+          platformConfig.gasOptimization,
+          platformConfig.mevProtection,
+          platformConfig.routeType
+        ]]
+      ));
+
+      // args[8]: SwapMetadata - Additional metadata
+      const metadata = {
+        integratorId: "moonx-farm-pro",
+        userData: "0x",
+        nonce: 0,
+        signature: "0x",
+        isPermit2: false,
+        aggregatorVersion: 2
+      };
+      args.push(ethers.AbiCoder.defaultAbiCoder().encode(
+        ["tuple(string,bytes,uint256,bytes,bool,uint8)"],
+        [[
+          metadata.integratorId,
+          metadata.userData,
+          metadata.nonce,
+          metadata.signature,
+          metadata.isPermit2,
+          metadata.aggregatorVersion
+        ]]
+      ));
+
+      // MoonX function ABI according to MoonX-Swap-Guide.md
       const moonxABI = [
-        "function execMoonXSwap(bytes[] calldata args) external payable returns (uint256)"
+        "function moonxExec(bytes[] calldata args) external payable returns (uint256)"
       ];
 
       const iface = new ethers.Interface(moonxABI);
-      const calldata = iface.encodeFunctionData('execMoonXSwap', [args]);
+      const calldata = iface.encodeFunctionData('moonxExec', [args]);
 
       return calldata;
     } catch (error) {
@@ -348,8 +504,13 @@ export class SwapService {
   }
 
   // Estimate gas for transaction
-  private async estimateGas(calldata: string, value: string, chainId: number): Promise<string> {
+  private async estimateGas(calldata: string | null, value: string, chainId: number): Promise<string> {
     try {
+      // If no calldata, return 0 gas estimate
+      if (!calldata) {
+        return '0';
+      }
+
       // Base gas estimates for different operations
       const baseGas = 200000; // Base gas for MoonX swap
       const tokenTransferGas = 65000; // Additional gas for token transfers
@@ -366,7 +527,7 @@ export class SwapService {
       return gasWithBuffer.toString();
     } catch (error) {
       console.error('Error estimating gas:', error);
-      return '250000'; // Safe fallback
+      return calldata ? '250000' : '0'; // Safe fallback or 0 if no calldata
     }
   }
 
@@ -382,7 +543,7 @@ export class SwapService {
     }
   }
 
-  // Get MoonX quote with retry logic to handle rate limiting
+  // Get MoonX quote with retry logic; try direct path and via-ETH multihop first
   private async getMoonXQuoteWithRetry(
     fromTokenAddress: string,
     toTokenAddress: string,
@@ -392,14 +553,78 @@ export class SwapService {
   ): Promise<any> {
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // First try: direct [A,B] and multihop [A,ETH,B]
+    try {
+      const directPromise = this.blockchainRepository.getMoonXQuoteByPath(
+        [fromTokenAddress, toTokenAddress], amount, network
+      ).then(q => q ? { ...q, routeType: 'direct' } : null);
+
+      const tryViaEth = fromTokenAddress !== ETH_ADDRESS && toTokenAddress !== ETH_ADDRESS;
+      const viaEthPromise = tryViaEth 
+        ? this.blockchainRepository.getMoonXQuoteByPath(
+            [fromTokenAddress, ETH_ADDRESS, toTokenAddress], amount, network
+          ).then(q => q ? { ...q, routeType: 'via-eth' } : null)
+        : Promise.resolve(null);
+
+      const [q1, q2] = await Promise.all([directPromise, viaEthPromise]);
+      const candidates = [q1, q2].filter(q => q && q.amountOut > 0n) as any[];
+      if (candidates.length) {
+        candidates.sort((a, b) => {
+          const l = Number(b.liquidity - a.liquidity);
+          if (l !== 0) return l;
+          return Number(b.amountOut - a.amountOut);
+        });
+        return candidates[0];
+      }
+    } catch (error: any) {
+      lastError = error;
+    }
+
+    // Second try: Check if tokens have getPoolKey method and use pool key approach
+    try {
+      const poolKeyQuote = await this.tryGetQuoteWithPoolKey(
+        fromTokenAddress,
+        toTokenAddress,
+        amount,
+        network
+      );
+      if (poolKeyQuote && poolKeyQuote.amountOut > 0n) {
+        console.log('Successfully got quote using pool key approach');
+        return poolKeyQuote;
+      }
+    } catch (error: any) {
+      console.log('Pool key approach failed, falling back to DB lookup:', error.message);
+    }
+
+    // Third try: Get pool info from MongoDB and build quote with hooks
+    if (this.dbInitialized) {
       try {
-        const quote = await this.blockchainRepository.getMoonXQuote(
+        const dbPoolQuote = await this.tryGetQuoteFromDatabase(
           fromTokenAddress,
           toTokenAddress,
           amount,
           network
         );
+        if (dbPoolQuote && dbPoolQuote.amountOut > 0n) {
+          console.log('Successfully got quote using database pool info');
+          return dbPoolQuote;
+        }
+      } catch (error: any) {
+        console.log('Database pool approach failed:', error.message);
+      }
+    }
+
+    // Fourth try: Normal quote approach with retry logic
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Try both direct and via-eth path in the last attempt loop
+        const [direct, viaEth] = await Promise.all([
+          this.blockchainRepository.getMoonXQuoteByPath([fromTokenAddress, toTokenAddress], amount, network),
+          (fromTokenAddress !== ETH_ADDRESS && toTokenAddress !== ETH_ADDRESS)
+            ? this.blockchainRepository.getMoonXQuoteByPath([fromTokenAddress, ETH_ADDRESS, toTokenAddress], amount, network)
+            : Promise.resolve(null)
+        ]);
+        const quote = [direct, viaEth].filter(q => q && q.amountOut > 0n)[0] || direct;
         
         // If successful, return the quote
         if (quote && quote.amountOut > 0n) {
@@ -407,6 +632,7 @@ export class SwapService {
         }
         
         // If quote is null or amountOut is 0, treat as temporary failure
+        console.warn(`Empty quote received on attempt ${attempt + 1}`);
         throw new Error('Empty quote received');
         
       } catch (error: any) {
@@ -430,8 +656,162 @@ export class SwapService {
       }
     }
 
-    // If all retries failed, throw the last error or a generic one
-    throw lastError || new Error('Failed to get MoonX quote after retries');
+    // If all approaches failed, return null instead of throwing error
+    console.warn('All quote approaches failed, returning null:', lastError?.message);
+    return null;
+  }
+
+  // Try to get quote using pool key approach
+  private async tryGetQuoteWithPoolKey(
+    fromTokenAddress: string,
+    toTokenAddress: string,
+    amount: string,
+    network: any
+  ): Promise<any> {
+    try {
+      // Check if either token has getPoolKey method
+      const poolKeyInfo = await this.checkTokenPoolKey(fromTokenAddress, toTokenAddress, network);
+      
+      if (poolKeyInfo) {
+        console.log('Found pool key info:', poolKeyInfo);
+        // Use the pool key information to get quote
+        return await this.blockchainRepository.getMoonXQuoteWithPoolKey(
+          fromTokenAddress,
+          toTokenAddress,
+          amount,
+          network,
+          poolKeyInfo
+        );
+      }
+      
+      return null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Check if tokens have getPoolKey method
+  private async checkTokenPoolKey(
+    fromTokenAddress: string,
+    toTokenAddress: string,
+    network: Network
+  ): Promise<any> {
+    try {
+      const provider = this.blockchainRepository.getProviderSync(network);
+      
+      // ABI for getPoolKey method
+      const poolKeyABI = [
+        "function getPoolKey(address token0, address token1) external view returns (tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks))"
+      ];
+
+      // Try to call getPoolKey on both tokens
+      const tokens = [fromTokenAddress, toTokenAddress];
+      
+      for (const tokenAddress of tokens) {
+        // Skip ETH address
+        if (tokenAddress === ethers.ZeroAddress || tokenAddress === '0x0000000000000000000000000000000000000000') {
+          continue;
+        }
+
+        try {
+          const contract = new ethers.Contract(tokenAddress, poolKeyABI, provider);
+          
+          // Try calling getPoolKey with both token addresses
+          const poolKey = await contract.getPoolKey(fromTokenAddress, toTokenAddress);
+          
+          if (poolKey && poolKey.length >= 5) {
+            return {
+              currency0: poolKey[0],
+              currency1: poolKey[1],
+              fee: poolKey[2],
+              tickSpacing: poolKey[3],
+              hooks: poolKey[4],
+              sourceToken: tokenAddress
+            };
+          }
+        } catch (error) {
+          // Method doesn't exist or call failed, continue to next token
+          continue;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error checking pool key:', error);
+      return null;
+    }
+  }
+
+
+
+  // Try to get quote using database pool information
+  private async tryGetQuoteFromDatabase(
+    fromTokenAddress: string,
+    toTokenAddress: string,
+    amount: string,
+    network: any
+  ): Promise<any> {
+    try {
+      // Focus on toToken first (destination token usually has the pool info we need)
+      const toTokenPoolInfo = await poolCacheService.getPoolInfo(toTokenAddress, network.chainId);
+      
+      if (toTokenPoolInfo) {
+
+        // Build pool key from toToken pool info (ensure proper token ordering)
+        const tIn = BigInt(fromTokenAddress);
+        const tOut = BigInt(toTokenAddress);
+        const dbPoolKey = {
+          currency0: tIn < tOut ? fromTokenAddress : toTokenAddress,
+          currency1: tIn < tOut ? toTokenAddress : fromTokenAddress,
+          fee: toTokenPoolInfo.fee,
+          tickSpacing: toTokenPoolInfo.tickSpacing,
+          hooks: toTokenPoolInfo.hooks,
+          sourceToken: toTokenAddress
+        };
+
+        // Use the database pool key to get quote
+        return await this.blockchainRepository.getMoonXQuoteWithPoolKey(
+          fromTokenAddress,
+          toTokenAddress,
+          amount,
+          network,
+          dbPoolKey
+        );
+      }
+
+      // Fallback: try fromToken if toToken doesn't have pool info
+      const fromTokenPoolInfo = await poolCacheService.getPoolInfo(fromTokenAddress, network.chainId);
+      
+      if (fromTokenPoolInfo) {
+
+        // Build pool key from fromToken pool info (ensure proper token ordering)
+        const tIn = BigInt(fromTokenAddress);
+        const tOut = BigInt(toTokenAddress);
+        const dbPoolKey = {
+          currency0: tIn < tOut ? fromTokenAddress : toTokenAddress,
+          currency1: tIn < tOut ? toTokenAddress : fromTokenAddress,
+          fee: fromTokenPoolInfo.fee,
+          tickSpacing: fromTokenPoolInfo.tickSpacing,
+          hooks: fromTokenPoolInfo.hooks,
+          sourceToken: fromTokenAddress
+        };
+
+        // Use the database pool key to get quote
+        return await this.blockchainRepository.getMoonXQuoteWithPoolKey(
+          fromTokenAddress,
+          toTokenAddress,
+          amount,
+          network,
+          dbPoolKey
+        );
+      }
+
+
+      return null;
+    } catch (error) {
+      console.error('Error getting quote from pool cache service:', error);
+      throw error;
+    }
   }
 
   // Helper function for delays

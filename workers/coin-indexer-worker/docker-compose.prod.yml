@@ -1,0 +1,80 @@
+# Production docker-compose for MoonX Coin Indexer Worker
+# Usage: docker-compose -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  coin-indexer-worker:
+    image: hiepht/moonx-farm:v4-indexer-worker-0.0.1
+    container_name: moonx-coin-indexer-worker
+    restart: always
+    
+    # Production environment variables
+    environment:
+      # External MongoDB (production)
+      - MOONX_COIN_MONGODB_URL=${MONGODB_URL:-mongodb://host.docker.internal:27017}
+      - MOONX_COIN_MONGODB_DATABASE=${MONGODB_DATABASE:-moonx_indexer}
+      
+      # External Redis (production)
+      - MOONX_COIN_REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379}
+      - MOONX_COIN_REDIS_DB=${REDIS_DB:-0}
+      
+      # External Kafka (production)
+      - MOONX_COIN_KAFKA_BOOTSTRAP_SERVERS=${KAFKA_SERVERS:-host.docker.internal:9092}
+      - MOONX_COIN_KAFKA_ENABLED=${KAFKA_ENABLED:-true}
+      
+      # Production performance tuning
+      - MOONX_COIN_WORKER_INTERVAL_SECONDS=10
+      - MOONX_COIN_MAX_CONCURRENT_CONTRACTS=6
+      - MOONX_COIN_MAX_CONCURRENT_BLOCKS=5
+      - MOONX_COIN_DATABASE_BATCH_SIZE=200
+      - MOONX_COIN_EVENT_PROCESSING_BATCH_SIZE=100
+      
+      # Production logging
+      - MOONX_COIN_LOG_LEVEL=INFO
+      - MOONX_COIN_LOG_FORMAT=json
+    
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    
+    # Production health check
+    healthcheck:
+      test: ["CMD", "python", "-m", "main", "health"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+    
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+        labels: "service,version,environment"
+    
+    # Labels for monitoring and identification
+    labels:
+      - "traefik.enable=false"
+      - "monitoring.enabled=true"
+      - "environment=production"
+      - "service=coin-indexer-worker"
+      - "version=v4-indexer-worker-0.0.1"
+
+# Production network configuration
+networks:
+  default:
+    name: moonx-indexer-network
+    driver: bridge

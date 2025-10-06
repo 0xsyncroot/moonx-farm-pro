@@ -1,0 +1,26 @@
+# Core framework
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# Data validation and settings  
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database and caching
+pymongo==4.6.0
+motor==3.3.2
+redis==5.0.1
+
+# Blockchain and Web3 (no pkg_resources dependency)
+web3==6.15.1
+
+# HTTP and networking
+aiohttp==3.9.1
+asyncio-throttle==1.0.2
+
+# Utilities and infrastructure
+tenacity==8.2.3
+apscheduler==3.10.4
+structlog==23.2.0
+click==8.1.7
+python-dotenv==1.0.0

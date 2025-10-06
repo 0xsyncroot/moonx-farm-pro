@@ -1,6 +1,8 @@
 import fastify, { FastifyInstance } from 'fastify';
 import dotenv from 'dotenv';
 import { SwapController } from './controllers/SwapController';
+import { NetworkController } from './controllers/NetworkController';
+import { requireApiKey } from './middleware/api-auth';
 
 dotenv.config();
 
@@ -19,8 +21,42 @@ app.register(require('@fastify/cors'), {
 // Initialize controllers
 const swapController = new SwapController();
 
-// Routes - Networks, tokens, and quote (for calldata generation)
-app.get('/api/networks', swapController.getNetworks.bind(swapController));
+// Routes - Networks (new MongoDB-backed endpoints)
+app.get('/api/networks', NetworkController.getNetworks);
+app.get('/api/networks/supported-chains', NetworkController.getSupportedChainIds);
+app.get('/api/networks/:chainId', NetworkController.getNetworkByChainId);
+app.post('/api/networks/refresh-cache', NetworkController.refreshCache);
+
+// Protected Network Management Routes (requires API key)
+app.post<{
+  Body: {
+    id: string;
+    name: string;
+    chainId: number;
+    rpc: string;
+    defaultRpc: string;
+    fallbackRpcs?: string[];
+    currency: string;
+    logoUrl: string;
+    explorer: string;
+    multicall3Address: string;
+    moonxContractAddress?: string;
+    blockExplorer?: string;
+    blockTime?: number;
+    confirmations?: number;
+    isActive?: boolean;
+  };
+}>('/api/networks', { preHandler: requireApiKey }, NetworkController.createNetwork);
+
+app.delete<{
+  Params: { chainId: string };
+}>('/api/networks/:chainId', { preHandler: requireApiKey }, NetworkController.deleteNetwork);
+
+app.put<{
+  Params: { chainId: string };
+}>('/api/networks/:chainId/activate', { preHandler: requireApiKey }, NetworkController.activateNetwork);
+
+// Routes - Tokens and quote (for calldata generation)
 
 // Fix: Change route to accept query parameters instead of path parameters
 app.get('/api/tokens', swapController.getTokens.bind(swapController));
@@ -104,13 +140,24 @@ const start = async (): Promise<void> => {
     console.log(`🚀 Server listening on http://${host}:${port}`);
     console.log(`📊 Health check: http://${host}:${port}/health`);
     console.log(`🔗 API Documentation:`);
-    console.log(`  GET  /api/networks - Get supported networks`);
-    console.log(`  GET  /api/tokens?chainId=X&search=Y&userAddress=Z - Get tokens with balances`);
+    console.log(`  === NETWORKS (MongoDB-backed + Redis cache) ===`);
+    console.log(`  GET  /api/networks - Get all active networks (without RPC info)`);
+    console.log(`  GET  /api/networks/:chainId - Get network by chain ID (without RPC info)`);
+    console.log(`  GET  /api/networks/supported-chains - Get supported chain IDs`);
+    console.log(`  POST /api/networks/refresh-cache - Refresh networks cache`);
+    console.log(`  === PROTECTED NETWORK MANAGEMENT (requires x-api-key header) ===`);
+    console.log(`  POST   /api/networks - Create/update network`);
+    console.log(`  DELETE /api/networks/:chainId - Deactivate network`);
+    console.log(`  PUT    /api/networks/:chainId/activate - Activate network`);
+    console.log(`  === TOKENS & SWAPS ===`);
+    console.log(`  GET  /api/tokens?chainId=X&search=Y&userAddress=Z - Get tokens with balances + prices`);
     console.log(`  GET  /api/tokens/specific?chainId=X&userAddress=Y&addresses=Z - Get specific tokens (optimized)`);
     console.log(`  POST /api/quote - Get swap quote with calldata (MoonX-Swap-Guide.md format)`);
     console.log(`  ✅ Updated: Uses bytes[] args format as per MoonX-Swap-Guide.md`);
     console.log(`  ✅ Cleaned: Removed executeSwap - all swaps now client-side only`);
     console.log(`  ✅ Platform fee: Auto-fetched from getPlatformFee() contract call`);
+    console.log(`  ✅ Price data: Token prices from Binance & DexScreener with 1min caching`);
+    console.log(`  ✅ Pool cache: MongoDB + Redis caching for pool information`);
     console.log(`🛡️  Graceful shutdown enabled (Ctrl+C to stop)`);
   } catch (err) {
     app.log.error(err);

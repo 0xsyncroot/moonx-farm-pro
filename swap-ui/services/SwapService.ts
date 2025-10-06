@@ -1,15 +1,12 @@
 import { ethers } from 'ethers';
 import { apiClient } from '@/libs/api';
-import { MOONX_CONTRACT_ADDRESS } from '@/libs/moonx';
+import { getMoonXContractAddress, MOONX_ABI, isNetworkSupported } from '@/libs/moonx';
 import { createWalletProvider, type WalletProviderConfig } from '@/libs/wallet-provider';
-import type { TokenBalance, SwapQuote, ServiceResult, RPCSettings } from '@/types/api';
+import type { TokenBalance, SwapQuote, ServiceResult, RPCSettings, Network } from '@/types/api';
 import { gasService, type GasSettings } from './GasService';
+import { mapErrorToSwapError, SwapErrorCode, type SwapError } from '@/types/errors';
 
-// MoonX Contract ABI theo tài liệu
-const MOONX_ABI = [
-  "function execMoonXSwap(bytes[] calldata args) external payable returns (uint256)",
-  "function moonxGetQuote(bytes[] calldata args) external returns (tuple(uint256 amountOut, uint128 liquidity, uint24 fee, uint8 version, address hooks, address[] path, bytes routeData))"
-];
+// MoonX Contract ABI is imported from @/libs/moonx
 
 export type SwapServiceResult<T> = ServiceResult<T>;
 
@@ -18,7 +15,7 @@ export interface QuoteParams {
   toToken: TokenBalance;
   fromAmount: string;
   slippage: number;
-  chainId: number;
+  network: Network; // Changed from chainId to network object
   userAddress: string;
 }
 
@@ -30,6 +27,7 @@ export interface SwapExecutionParams {
   toToken: TokenBalance;
   fromAmount: string;
   slippage: number;
+  network: Network; // Network object containing chain ID and contract address
   userAddress: string;
   rpcSettings: RPCSettings;
   walletConfig: WalletProviderConfig;
@@ -42,6 +40,7 @@ export interface DirectSwapParams {
   tokenOut: string; // Token address hoặc ETH (0x0000...)
   amountIn: string; // Amount in wei
   slippage: number; // Slippage in basis points (300 = 3%)
+  network: Network; // Network object containing chain ID and contract address
   recipient: string; // Recipient address
   refAddress?: string; // Referral address
   refFee?: number; // Referral fee in basis points
@@ -102,7 +101,7 @@ export class SwapService {
         toTokenAddress: params.toToken.token.address,
         amount: amountInWei,
         slippage: params.slippage,
-        chainId: params.chainId,
+        chainId: params.network.chainId,
         userAddress: params.userAddress
       });
       if (!response || !response.quote) {
@@ -182,6 +181,16 @@ export class SwapService {
         };
       }
 
+      // Validate network support and get contract address
+      if (!isNetworkSupported(params.network)) {
+        return {
+          success: false,
+          error: `Network ${params.network.name} (chain ${params.network.chainId}) is not supported for swaps`
+        };
+      }
+      
+      const contractAddress = getMoonXContractAddress(params.network);
+      
       // Create wallet provider using the full config from params (includes Privy context)
       const provider = createWalletProvider(params.walletConfig);
 
@@ -220,21 +229,19 @@ export class SwapService {
           params.fromToken.token.symbol,
           params.fromToken.token.decimals,
           signer,
-          gasSettings
+          gasSettings,
+          contractAddress // Pass contract address for this chain
         );
       } else {
         // For ETH swaps, get current nonce
         nextNonce = await signer.getNonce('pending');
       }
 
-      // Execute swap using calldata from quote
-      console.log(`🔄 Executing swap: ${params.fromAmount} ${params.fromToken.token.symbol} → ${params.toToken.token.symbol}`);
-      
       // Prepare swap transaction with explicit nonce to prevent replacement
       const swapTxParams = await gasService.prepareTransactionParams(
         signer,
         {
-          to: MOONX_CONTRACT_ADDRESS,
+          to: contractAddress,
           data: params.quote.moonxQuote.calldata,
           value: params.quote.moonxQuote.value || '0'
         },
@@ -243,54 +250,38 @@ export class SwapService {
       
       // Use explicit nonce to prevent replacement
       swapTxParams.nonce = nextNonce;
-      console.log(`📋 Using nonce ${nextNonce} for swap transaction`);
       
       // Execute transaction with retry logic for nonce conflicts
       const tx = await this.executeTransactionWithRetry(signer, swapTxParams, 'swap');
 
-      console.log(`⏳ Transaction sent: ${tx.hash}`);
       const receipt = await tx.wait(1);
 
       if (!receipt) {
         throw new Error('Transaction receipt not received');
       }
 
-      console.log(`✅ Swap completed successfully: ${receipt.hash}`);
       return {
         success: true,
         data: receipt.hash
       };
-    } catch (error) {
-      console.error('❌ Swap execution failed:', error);
-      
-      const errorMessage = error instanceof Error ? error.message : 'Swap execution failed';
-      
-      // Provide more specific error messages
-      if (errorMessage.includes('user rejected')) {
-        return {
-          success: false,
-          error: 'Transaction was rejected by user'
-        };
-      } else if (errorMessage.includes('insufficient funds')) {
-        return {
-          success: false,
-          error: 'Insufficient funds for transaction'
-        };
-      } else if (errorMessage.includes('gas')) {
-        return {
-          success: false,
-          error: 'Transaction failed due to gas issues. Try increasing gas limit.'
-        };
-      } else if (errorMessage.includes('allowance')) {
-        return {
-          success: false,
-          error: 'Token approval failed. Please try again.'
-        };
+    } catch (error: any) {  
+      // If it's already a SwapError from wallet-provider/secure-signer, throw it directly
+      if (error.code && Object.values(SwapErrorCode).includes(error.code)) {
+        throw error;
       }
-
+      
+      // For other errors, map to SwapError for consistent handling
+      const swapError = error instanceof Error ? mapErrorToSwapError(error) : mapErrorToSwapError(new Error('Unknown error'));
+      
+      // For wallet/session errors, throw the SwapError directly so UI can handle them properly
+      if (swapError.action === 'unlock' || swapError.action === 'connect') {
+        throw swapError;
+      }
+      
+      // For other errors, return as before for backward compatibility
       return {
         success: false,
-        error: `Swap failed: ${errorMessage}`
+        error: swapError.userMessage || swapError.message
       };
     }
   }
@@ -385,23 +376,22 @@ export class SwapService {
     tokenSymbol: string,
     decimals: number,
     signer: ethers.Signer,
-    gasSettings: GasSettings
+    gasSettings: GasSettings,
+    contractAddress: string
   ): Promise<number> {
-    const allowance = await tokenContract.allowance(userAddress, MOONX_CONTRACT_ADDRESS);
+    const allowance = await tokenContract.allowance(userAddress, contractAddress);
 
     if (allowance < BigInt(amountIn)) {
-      console.log(`🔓 Approving ${tokenSymbol} for swap...`);
       
       // Get current nonce explicitly to avoid race conditions
       const currentNonce = await signer.getNonce('pending');
-      console.log(`📋 Using nonce ${currentNonce} for approval transaction`);
       
       // Prepare approval transaction with explicit nonce
       const approvalTxParams = await gasService.prepareTransactionParams(
         signer,
         {
           to: await tokenContract.getAddress(),
-          data: tokenContract.interface.encodeFunctionData('approve', [MOONX_CONTRACT_ADDRESS, amountIn])
+          data: tokenContract.interface.encodeFunctionData('approve', [contractAddress, amountIn])
         },
         gasSettings
       );
@@ -417,7 +407,6 @@ export class SwapService {
         throw new Error('Approval transaction failed - no receipt received');
       }
       
-      console.log(`⏳ Approval transaction confirmed: ${receipt.hash}`);
       
       // Verify allowance was actually updated - retry up to 3 times
       let retryCount = 0;
@@ -425,7 +414,7 @@ export class SwapService {
       let updatedAllowance = BigInt(0);
       
       while (retryCount < maxRetries) {
-        updatedAllowance = await tokenContract.allowance(userAddress, MOONX_CONTRACT_ADDRESS);
+        updatedAllowance = await tokenContract.allowance(userAddress, contractAddress);
         
         if (updatedAllowance >= BigInt(amountIn)) {
           console.log(`✅ ${tokenSymbol} allowance verified: ${ethers.formatUnits(updatedAllowance, decimals)}`);
@@ -434,7 +423,6 @@ export class SwapService {
         
         retryCount++;
         if (retryCount < maxRetries) {
-          console.log(`⏳ Allowance not yet updated, retrying (${retryCount}/${maxRetries})...`);
           await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
         }
       }
@@ -466,7 +454,6 @@ export class SwapService {
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`🚀 Attempting ${txType} transaction (${attempt}/${maxRetries})...`);
         return await signer.sendTransaction(txParams);
       } catch (error: any) {
         lastError = error;
@@ -478,12 +465,10 @@ export class SwapService {
             errorMessage.includes('already known')) {
           
           if (attempt < maxRetries) {
-            console.log(`⚠️  Nonce conflict detected, retrying with fresh nonce (${attempt}/${maxRetries})...`);
             
             // Get fresh nonce and update transaction
             const freshNonce = await signer.getNonce('pending');
             txParams.nonce = freshNonce;
-            console.log(`📋 Updated to fresh nonce: ${freshNonce}`);
             
             // Add small delay to avoid rapid retries
             await new Promise(resolve => setTimeout(resolve, 500));
@@ -492,7 +477,6 @@ export class SwapService {
         }
         
         // For other errors or max retries reached, throw immediately
-        console.error(`❌ ${txType} transaction failed (attempt ${attempt}/${maxRetries}):`, error);
         if (attempt === maxRetries) break;
         
         // Add delay before retry for non-nonce errors
@@ -524,9 +508,11 @@ export class SwapService {
     signer: ethers.Signer,
     tokenIn: string,
     tokenOut: string,
-    amountIn: string
+    amountIn: string,
+    network: Network
   ): Promise<any> {
-    const moonxContract = new ethers.Contract(MOONX_CONTRACT_ADDRESS, MOONX_ABI, signer);
+    const contractAddress = getMoonXContractAddress(network);
+    const moonxContract = new ethers.Contract(contractAddress, MOONX_ABI, signer);
     
     const quoteArgs = [
       ethers.AbiCoder.defaultAbiCoder().encode(["address"], [tokenIn]),
@@ -536,14 +522,6 @@ export class SwapService {
     
     // Sử dụng staticCall để lấy quote
     const quote = await moonxContract.moonxGetQuote.staticCall(quoteArgs);
-    
-    console.log("📊 Quote from Contract:", {
-      version: Number(quote.version),
-      amountOut: quote.amountOut.toString(),
-      fee: quote.fee ? Number(quote.fee) : "N/A",
-      path: quote.path ? quote.path : "N/A",
-      routeData: quote.routeData ? quote.routeData : "N/A"
-    });
     
     if (Number(quote.version) === 0) {
       throw new Error("Không tìm thấy route hợp lệ cho cặp token này");
@@ -613,33 +591,33 @@ export class SwapService {
    */
   async executeSwapDirect(params: DirectSwapParams): Promise<SwapServiceResult<string>> {
     try {
-      console.log('🔄 Starting Direct MoonX Swap:', {
-        tokenIn: params.tokenIn,
-        tokenOut: params.tokenOut,
-        amountIn: params.amountIn,
-        slippage: params.slippage
-      });
+      // Validate network support
+      if (!isNetworkSupported(params.network)) {
+        return {
+          success: false,
+          error: `Network ${params.network.name} (chain ${params.network.chainId}) is not supported for direct swaps`
+        };
+      }
 
       // 1. Tạo wallet provider
       const walletProvider = await createWalletProvider(params.walletConfig);
       const signer = await walletProvider.getSigner();
 
       // 2. Lấy quote từ contract - QUAN TRỌNG
-      const quote = await this.getQuoteFromContract(signer, params.tokenIn, params.tokenOut, params.amountIn);
+      const quote = await this.getQuoteFromContract(signer, params.tokenIn, params.tokenOut, params.amountIn, params.network);
       
       // Initialize nonce variable
       let nextNonce: number;
 
       // 3. Kiểm tra và approve token nếu cần (không phải ETH)
       if (params.tokenIn !== "0x0000000000000000000000000000000000000000") {
-        console.log(`🔓 Checking allowance for ${params.tokenIn}...`);
-        
         const tokenContract = new ethers.Contract(params.tokenIn, [
           "function approve(address spender, uint256 amount) returns (bool)",
           "function allowance(address owner, address spender) view returns (uint256)"
         ], signer);
 
         const userAddress = await signer.getAddress();
+        const contractAddress = getMoonXContractAddress(params.network);
         
         // Use helper function to ensure proper approval and get next nonce
         nextNonce = await this.tokenApproval(
@@ -649,7 +627,8 @@ export class SwapService {
           'Token', // Generic symbol for direct swap
           18, // Default decimals for direct swap
           signer,
-          params.gasSettings
+          params.gasSettings,
+          contractAddress
         );
       } else {
         // For ETH swaps, get current nonce
@@ -668,10 +647,9 @@ export class SwapService {
         params.refFee
       );
 
-      console.log('📋 Built swap args:', args.length, 'parameters');
-
       // 5. Create contract instance
-      const moonxContract = new ethers.Contract(MOONX_CONTRACT_ADDRESS, MOONX_ABI, signer);
+      const contractAddress = getMoonXContractAddress(params.network);
+      const moonxContract = new ethers.Contract(contractAddress, MOONX_ABI, signer);
 
       // 6. Prepare transaction với ethers estimate gas
       const value = params.tokenIn === "0x0000000000000000000000000000000000000000" ? params.amountIn : "0";
@@ -679,7 +657,7 @@ export class SwapService {
       const swapTxParams = await gasService.prepareTransactionParams(
         signer,
         {
-          to: MOONX_CONTRACT_ADDRESS,
+          to: contractAddress,
           data: moonxContract.interface.encodeFunctionData('execMoonXSwap', [args]),
           value
         },
@@ -689,23 +667,14 @@ export class SwapService {
       // Use explicit nonce to prevent replacement
       swapTxParams.nonce = nextNonce;
       
-      console.log('⚡ Prepared transaction with gas and nonce:', {
-        gasLimit: swapTxParams.gasLimit?.toString(),
-        nonce: nextNonce,
-        value: value
-      });
-
       // 7. Execute swap with retry logic for nonce conflicts
       const tx = await this.executeTransactionWithRetry(signer, swapTxParams, 'direct swap');
-      console.log(`⏳ Direct swap transaction sent: ${tx.hash}`);
       
       const receipt = await tx.wait();
       if (!receipt) {
         throw new Error('Transaction failed - no receipt received');
       }
 
-      console.log(`✅ Direct swap completed: ${receipt.hash}`);
-      
       return {
         success: true,
         data: receipt.hash

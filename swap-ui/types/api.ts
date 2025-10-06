@@ -1,13 +1,16 @@
 // API-related types - Independent from implementation
 
 export interface Network {
+  id: string; // Unique identifier for network
   name: string;
   chainId: number; // Base network chainId: 8453
   rpc?: string; // Optional - not included in API response for security
+  defaultRpc?: string;
   currency: string;
   multicall3Address: string;
   logoUrl: string;
   explorer: string;
+  moonxContractAddress?: string;
 }
 
 export interface Token {
@@ -17,7 +20,7 @@ export interface Token {
   decimals: number;
   logoURI?: string;
   // Extended Jupiter-style fields
-  price?: number;           // Current USD price
+  priceUsd?: number;        // Current USD price (matches API response)
   priceChange24h?: number;  // 24h price change %
   marketCap?: number;       // Market cap in USD
   volume24h?: number;       // 24h volume

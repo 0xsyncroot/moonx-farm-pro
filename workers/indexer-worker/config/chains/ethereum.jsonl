@@ -1,0 +1,91 @@
+{
+  "chain_id": 1,
+  "name": "Ethereum",
+  "rpc_url": "https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY",
+  "block_time": 12,
+  "confirmation_blocks": 12,
+  "start_block": 10000835,
+  "max_block_range": 2000,
+  "gas_price_strategy": "fast",
+  "pools": [
+    {
+      "protocol": "uniswap_v2",
+      "factory": "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f",
+      "router": "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D",
+      "pool_created_topic": "0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9",
+      "swap_topic": "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822",
+      "creation_block": 10000835,
+      "fee_percentage": 0.3,
+      "enabled": true
+    },
+    {
+      "protocol": "uniswap_v3", 
+      "factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
+      "router": "0xE592427A0AEce92De3Edee1F18E0157C05861564",
+      "nonfungible_position_manager": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
+      "pool_created_topic": "0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118",
+      "swap_topic": "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
+      "mint_topic": "0x7a53080ba414158be7ec69b987b5fb7d07dee101fe85488f0853ae16239d0bde",
+      "burn_topic": "0x0c396cd989a39f4459b5fa1aed6a9a8dcdbc45908acfd67e028cd568da98982c",
+      "creation_block": 12369621,
+      "fee_tiers": [100, 500, 3000, 10000],
+      "enabled": true
+    },
+    {
+      "protocol": "sushiswap",
+      "factory": "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac",
+      "router": "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F",
+      "pool_created_topic": "0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9",
+      "swap_topic": "0xd78ad95fa46c994b6551d0da85fc275fe613ce37657fb8d5e3d130840159d822",
+      "creation_block": 10794229,
+      "fee_percentage": 0.3,
+      "enabled": true
+    },
+    {
+      "protocol": "sushiswap_v3",
+      "factory": "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F",
+      "router": "0x827179dD56d07A7eeA32e3873493835da2866976",
+      "pool_created_topic": "0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118",
+      "swap_topic": "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67",
+      "creation_block": 16955547,
+      "fee_tiers": [100, 500, 3000, 10000],
+      "enabled": true
+    },
+    {
+      "protocol": "balancer_v2",
+      "vault": "0xBA12222222228d8Ba445958a75a0704d566BF2C8",
+      "factory": "0x8E9aa87E45f71F1697B55e1C4e14fD60D5a01c1C",
+      "weighted_pool_factory": "0x8E9aa87E45f71F1697B55e1C4e14fD60D5a01c1C",
+      "stable_pool_factory": "0xc66Ba2B6595D3613CCab350C886aCE23866EDe24",
+      "pool_registered_topic": "0x3c13bc30b8e878c53fd2a36b679409c073afd75950be43d8858768e956fbc20e",
+      "swap_topic": "0x2170c741c41531aec20e7c107c24eecfdd15e69c9bb0a8dd37b1840b9e0b207b",
+      "creation_block": 12272146,
+      "enabled": true
+    },
+    {
+      "protocol": "curve",
+      "factory": "0x0959158b6040D32d04c301A72CBFD6b39E21c9AE",
+      "meta_factory": "0xB9fC157394Af804a3578134A6585C0dc9cc990d4",
+      "crypto_factory": "0xF18056Bbd320E96A48e3Fbf8bC061322531aac99",
+      "pool_deployed_topic": "0x96679fb32c8a4c8a8b76a5e90a20d0e2a2ff99da2dc90ce9ea52bfb1a8fa4d11",
+      "token_exchange_topic": "0x8b3e96f2b889fa771c53c981b40daf005f63f637f1869f707052d15a3dd97140",
+      "creation_block": 9456293,
+      "enabled": true
+    }
+  ],
+  "special_tokens": {
+    "WETH": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "USDC": "0xA0b86a33E6417c7ed68F009aE9b9A80c38a0AA99",
+    "USDT": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    "DAI": "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+  },
+  "monitoring": {
+    "health_check_interval": 30,
+    "metrics_enabled": true,
+    "alert_thresholds": {
+      "block_lag_threshold": 100,
+      "error_rate_threshold": 0.05,
+      "processing_time_threshold": 300
+    }
+  }
+}

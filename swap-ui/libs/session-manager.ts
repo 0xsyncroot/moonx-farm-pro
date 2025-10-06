@@ -6,6 +6,7 @@ import {
   isSessionKeyValid,
   clearSessionKeys 
 } from './crypto';
+import { SwapErrorFactory } from '@/types/errors';
 
 export interface WalletSession {
   id: string;
@@ -287,16 +288,16 @@ class SessionManager {
   /**
    * Get private key from current session (requires wallet for decryption)
    */
-  async getPrivateKey(wallet: EncryptedWallet): Promise<string | null> {
+  async getPrivateKey(wallet: EncryptedWallet): Promise<string> {
     if (!this.currentSession) {
-      return null;
+      throw SwapErrorFactory.createAuthenticationRequiredError();
     }
 
     const now = Date.now();
     // Check if session expired (with 5 second buffer)
     if (now > (this.currentSession.expiresAt + 5000)) {
-      // Session expired, return null but don't auto-lock
-      return null;
+      // Session expired, throw specific error
+      throw SwapErrorFactory.createSessionExpiredError();
     }
 
     // If no session key (restored session), create one on-demand without authentication
@@ -313,9 +314,9 @@ class SessionManager {
 
     // Verify session key is still valid (if it exists)
     if (this.currentSession.sessionKeyRef && !isSessionKeyValid(this.currentSession.sessionKeyRef)) {
-      // Session key invalid, clear session
+      // Session key invalid, clear session and throw error
       this.currentSession = null;
-      return null;
+      throw SwapErrorFactory.createSessionExpiredError();
     }
 
     try {
@@ -327,10 +328,11 @@ class SessionManager {
         return privateKey;
       }
       
-      return null;
+      // If decryption returns null, throw error instead of returning null
+      throw SwapErrorFactory.createPrivateKeyDecryptError();
     } catch (error) {
-      // Decryption failed, session may be corrupted or expired
-      return null;
+      // Let errors bubble up from crypto level - don't wrap them here
+      throw error;
     }
   }
 

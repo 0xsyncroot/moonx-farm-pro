@@ -1,0 +1,90 @@
+# ==============================================
+# MoonX Farm Pro - Indexer Worker Configuration
+# ==============================================
+
+# Copy this file to .env and update values for your environment
+
+# -------------------------------------
+# Database Configuration
+# -------------------------------------
+MOONX_MONGODB_URL=mongodb://moonx_indexer:indexer_password_123@localhost:27017/moonx_indexer
+MOONX_MONGODB_DATABASE=moonx_indexer
+
+# -------------------------------------
+# Redis Configuration 
+# -------------------------------------
+# Local development (no password)
+MOONX_REDIS_URL=redis://localhost:6379
+
+# Production with password authentication
+# MOONX_REDIS_URL=redis://:your_redis_password@redis-server:6379
+# MOONX_REDIS_URL=redis://username:password@redis-server:6379
+
+# Redis Cloud / ElastiCache / MemoryDB examples  
+# MOONX_REDIS_URL=redis://:password@your-cluster.cache.amazonaws.com:6379
+# MOONX_REDIS_URL=rediss://:password@secure-redis.com:6380
+
+# Docker Compose Redis password (optional)
+# REDIS_PASSWORD=your_secure_redis_password
+
+MOONX_REDIS_DB=0
+MOONX_REDIS_KEY_PREFIX=moonx:indexer
+
+# -------------------------------------
+# Worker Configuration
+# -------------------------------------
+MOONX_WORKER_INTERVAL_SECONDS=60
+MOONX_WORKER_BATCH_SIZE=100
+MOONX_WORKER_MAX_RETRIES=3
+MOONX_WORKER_RETRY_DELAY=30
+
+# -------------------------------------
+# Blockchain Configuration
+# -------------------------------------
+MOONX_DEFAULT_CHAIN_ID=8453
+MOONX_RPC_TIMEOUT=60  # Individual RPC call timeout
+MOONX_RPC_REQUEST_TIMEOUT=90  # Overall request timeout
+MOONX_RPC_MAX_RETRIES=3  # Method-level retry attempts  
+MOONX_RPC_RETRY_DELAY=2  # Base delay between retries (exponential backoff)
+MOONX_MAX_BLOCKS_PER_REQUEST=2000
+
+# -------------------------------------
+# Multi-Chain RPC Configuration
+# -------------------------------------
+# Primary RPC URLs (override JSON configs)
+BASE_RPC=https://mainnet.base.org
+#ETHEREUM_RPC=https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY
+#BSC_RPC=https://bsc-dataseed1.binance.org
+#POLYGON_RPC=https://polygon-rpc.com
+
+# Backup RPC URLs (comma-separated, optional)
+# BASE_BACKUP_RPCS=https://base.blockpi.network/v1/rpc/public,https://developer-access-mainnet.base.org
+# ETHEREUM_BACKUP_RPCS=https://rpc.ankr.com/eth,https://eth.public-rpc.com
+# BSC_BACKUP_RPCS=https://bsc-dataseed2.binance.org,https://bsc-dataseed3.binance.org
+# POLYGON_BACKUP_RPCS=https://rpc-mainnet.matic.network,https://rpc-mainnet.maticvigil.com
+
+# -------------------------------------
+# Lock Configuration
+# -------------------------------------
+MOONX_LOCK_TIMEOUT_SECONDS=300
+MOONX_LOCK_RETRY_DELAY=5
+
+# -------------------------------------
+# Logging Configuration
+# -------------------------------------
+MOONX_LOG_LEVEL=INFO
+MOONX_LOG_FORMAT=json
+
+# -------------------------------------
+# Scalability Configuration
+# -------------------------------------
+MOONX_ENABLE_DISTRIBUTED_PROCESSING=true
+MOONX_WORKER_POOL_SIZE=4
+
+# -------------------------------------
+# Performance Optimization
+# -------------------------------------
+MOONX_MAX_CONCURRENT_PROTOCOLS=4
+MOONX_MAX_CONCURRENT_LOGS_PER_PROTOCOL=20
+MOONX_LOG_BATCH_SIZE=10
+MOONX_DATABASE_BATCH_SIZE=100

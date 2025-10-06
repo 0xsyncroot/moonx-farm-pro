@@ -1,0 +1,188 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moonx-indexer-worker
+  labels:
+    app: moonx-indexer-worker
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: moonx-indexer-worker
+  template:
+    metadata:
+      labels:
+        app: moonx-indexer-worker
+    spec:
+      containers:
+      - name: indexer-worker
+        image: moonx/indexer-worker:latest
+        ports:
+        - containerPort: 8080
+          name: health
+        env:
+        - name: MOONX_MONGODB_URL
+          valueFrom:
+            secretKeyRef:
+              name: moonx-secrets
+              key: mongodb-url
+        - name: MOONX_REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: moonx-secrets
+              key: redis-url
+        - name: BASE_RPC
+          valueFrom:
+            secretKeyRef:
+              name: moonx-secrets
+              key: base-rpc
+        - name: MOONX_LOG_LEVEL
+          value: "INFO"
+        - name: MOONX_WORKER_INTERVAL_SECONDS
+          value: "60"
+        - name: MOONX_ENABLE_DISTRIBUTED_PROCESSING
+          value: "true"
+        - name: MOONX_WORKER_POOL_SIZE
+          value: "4"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config/chains
+          readOnly: true
+        - name: logs-volume
+          mountPath: /app/logs
+      volumes:
+      - name: config-volume
+        configMap:
+          name: moonx-chain-configs
+      - name: logs-volume
+        emptyDir: {}
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: moonx-indexer-worker-service
+  labels:
+    app: moonx-indexer-worker
+spec:
+  selector:
+    app: moonx-indexer-worker
+  ports:
+  - name: health
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: moonx-chain-configs
+data:
+  base.json: |
+    {
+      "chain_id": 8453,
+      "name": "Base",
+      "rpc_url": "https://mainnet.base.org",
+      "block_time": 2,
+      "start_block": 17000000,
+      "pools": [
+        {
+          "protocol": "uniswap_v3",
+          "factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+          "router": "0x2626664c2603336E57B271c5C0b26F421741e481",
+          "pool_created_topic": "0x783cca1c0412dd0d695e784568c96da2e9c22ff989357a2e8b1d9b2b4e6b7118"
+        },
+        {
+          "protocol": "sushiswap",
+          "factory": "0x71524B4f93c58fcbF659783284E38825f0622859",
+          "router": "0x6BDED42c6DA8FBf0d2bA55B2fa120C5e0c8D7891",
+          "pool_created_topic": "0x0d3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9"
+        }
+      ],
+      "contracts": {
+        "multicall": "0xcA11bde05977b3631167028862bE2a173976CA11",
+        "weth": "0x4200000000000000000000000000000000000006"
+      }
+    }
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: moonx-secrets
+type: Opaque
+stringData:
+  mongodb-url: "mongodb://mongo-service:27017/moonx_indexer"
+  redis-url: "redis://redis-service:6379"
+  base-rpc: "https://mainnet.base.org"
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: moonx-indexer-worker-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: moonx-indexer-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60

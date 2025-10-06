@@ -1,0 +1,25 @@
+{
+  "name": "moonx-aggregator-demos",
+  "version": "1.0.0",
+  "description": "Demo scripts for MoonX Aggregator new workflow (moonxGetQuote → moonxExec)",
+  "scripts": {
+    "demo:quote": "node demo-get-quote.js",
+    "demo:swap": "node demo-swap.js", 
+    "demo:workflow": "node demo-new-workflow.js",
+    "demo:all": "npm run demo:quote && npm run demo:swap && npm run demo:workflow"
+  },
+  "keywords": [
+    "moonx",
+    "aggregator", 
+    "uniswap",
+    "defi",
+    "swap",
+    "demo"
+  ],
+  "dependencies": {
+    "ethers": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

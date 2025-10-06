@@ -1,12 +1,15 @@
 export interface Network {
+  id: string;
   name: string;
   chainId: number;
   rpc: string;
   defaultRpc: string;
+  fallbackRpcs?: string[]; // Additional RPC URLs for redundancy
   currency: string;
   multicall3Address: string;
   logoUrl: string;
   explorer: string;
+  moonxContractAddress?: string;
 }
 
 export interface Token {
@@ -17,6 +20,11 @@ export interface Token {
   balance?: string;
   formattedBalance?: string;
   logoURI?: string;
+  useBinance?: boolean; // Internal: true if token price available from Binance API (not in response)
+  // Price information
+  priceUsd?: number;
+  priceChange24h?: number;
+  volume24h?: number;
 }
 
 export interface TokenBalance {
@@ -33,6 +41,7 @@ export interface MoonXQuoteResult {
   hooks: string;
   path: string[];
   routeData: string;
+  poolKey?: any; // Optional pool key information
 }
 
 export interface SwapQuote {

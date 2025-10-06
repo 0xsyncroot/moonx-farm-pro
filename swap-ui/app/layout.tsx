@@ -26,9 +26,9 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://pro.moonx.farm"),
-  title: "MoonX Swap - Cross-Chain DEX Aggregator",
+  title: "MoonX Farm - Farming Aggregator",
   description: "Multi-aggregator routing • MEV Protection • Best execution on EVM chains",
-  keywords: ["DeFi", "DEX", "Swap", "Ethereum", "Base", "Cross-chain", "MoonX"],
+  keywords: ["DeFi", "DEX", "Swap", "Ethereum", "Base", "Cross-chain", "MoonX", "Farming"],
   authors: [{ name: "MoonX Team" }],
   robots: "index, follow",
   icons: {
@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   },
   manifest: "/manifest.json",
   openGraph: {
-    title: "MoonX Swap - Cross-Chain DEX Aggregator",
+    title: "MoonX Farm - Farming Aggregator",
     description: "Multi-aggregator routing • MEV Protection • Best execution",
     url: "https://pro.moonx.farm",
     siteName: "MoonX Swap",
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "MoonX Swap - Cross-Chain DEX Aggregator",
+        alt: "MoonX Farm - Farming Aggregator",
       },
     ],
     locale: "en_US",
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "MoonX Swap - Cross-Chain DEX Aggregator",
+    title: "MoonX Farm - Farming Aggregator",
     description: "Multi-aggregator routing • MEV Protection • Best execution",
     images: ["/og-image.png"],
   },

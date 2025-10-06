@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowDownUp, Settings, Zap, Clock, TrendingUp, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowDownUp, Settings, Zap, Clock, TrendingUp, RefreshCw, RotateCcw, AlertTriangle, Search } from 'lucide-react';
 import { Button, Input, TokenInput, TokenAmountDisplay, ErrorCard, useToast } from '@/components/ui';
 import TokenSelector from './TokenSelector';
 import SlippageModal from './SlippageModal';
@@ -9,6 +9,8 @@ import SlippageModal from './SlippageModal';
 import { useSwap } from '@/hooks/useSwap';
 import { useUIState, useWalletState, useNetworkState, useTokenState } from '@/stores';
 import { buildTransactionUrl } from '@/utils';
+import { SwapErrorCode, type SwapError } from '@/types/errors';
+import { tokenService } from '@/services/TokenService';
 
 const SwapContainer: React.FC = () => {
   const {
@@ -54,6 +56,26 @@ const SwapContainer: React.FC = () => {
 
   const fromTokenBalance = getLatestBalance(swapForm.fromToken);
   const toTokenBalance = getLatestBalance(swapForm.toToken);
+
+  // Calculate USD values
+  const calculateFromUSDValue = (): string => {
+    if (!swapForm.fromToken?.token.priceUsd || !swapForm.fromAmount) return '$0.00';
+    const amount = parseFloat(swapForm.fromAmount);
+    if (isNaN(amount) || amount === 0) return '$0.00';
+    const usdValue = amount * swapForm.fromToken.token.priceUsd;
+    return tokenService.formatUSDValue(usdValue);
+  };
+
+  const calculateToUSDValue = (): string => {
+    if (!swapForm.toToken?.token.priceUsd || !hasValidQuote || !quote) return '$0.00';
+    const amount = parseFloat(quote.toAmount);
+    if (isNaN(amount) || amount === 0) return '$0.00';
+    const usdValue = amount * swapForm.toToken.token.priceUsd;
+    return tokenService.formatUSDValue(usdValue);
+  };
+
+  const fromUSDValue = calculateFromUSDValue();
+  const toUSDValue = calculateToUSDValue();
 
 // Tutorial step completion tracking is now handled in TutorialGuide component
 
@@ -202,17 +224,103 @@ const SwapContainer: React.FC = () => {
         toast.error('Swap Failed', 'Transaction was not completed');
       }
     } catch (error: any) {
-      // Check if error contains transaction hash (failed transaction but still submitted)
-      const txHash = error?.transactionHash || error?.hash;
-      const explorerUrl = selectedNetwork && txHash ? buildTransactionUrl(selectedNetwork, txHash) : null;
-      
-      toast.showToast('error', 'Swap Failed', {
-        message: 'An unexpected error occurred during the swap',
-        action: explorerUrl ? {
-          label: 'View Transaction',
-          onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer')
-        } : undefined
+      console.error('❌ Swap execution failed:', error);
+      console.error('🔍 UI Error debug info:', {
+        hasCode: !!error?.code,
+        errorCode: error?.code,
+        errorAction: error?.action,
+        errorMessage: error?.message,
+        userMessage: error?.userMessage
       });
+      
+      // Check if this is a SwapError with specific code
+      const swapError = error as SwapError;
+      
+      if (swapError?.code) {
+        // Handle specific error codes
+        switch (swapError.code) {
+          case SwapErrorCode.WALLET_SESSION_EXPIRED:
+          case SwapErrorCode.WALLET_LOCKED:
+          case SwapErrorCode.PRIVATE_KEY_DECRYPT_FAILED:
+          case SwapErrorCode.AUTHENTICATION_REQUIRED:
+          case SwapErrorCode.DEVICE_FINGERPRINT_MISMATCH:
+            toast.showToast('warning', 'Wallet Session Expired', {
+              message: swapError.userMessage || 'Your wallet session has expired. Please unlock your wallet to continue.',
+              action: {
+                label: 'Unlock Wallet',
+                onClick: () => openWalletModal('manage')
+              }
+            });
+            break;
+            
+          case SwapErrorCode.WALLET_NOT_CONNECTED:
+          case SwapErrorCode.WALLET_CONNECTION_LOST:
+          case SwapErrorCode.WALLET_NOT_FOUND:
+          case SwapErrorCode.WALLET_ADDRESS_MISMATCH:
+            toast.showToast('error', 'Wallet Connection Lost', {
+              message: swapError.userMessage || 'Your wallet connection was lost. Please reconnect your wallet.',
+              action: {
+                label: 'Reconnect Wallet',
+                onClick: () => openWalletModal('connect')
+              }
+            });
+            break;
+            
+          case SwapErrorCode.NETWORK_ERROR:
+          case SwapErrorCode.RPC_CONNECTION_FAILED:
+          case SwapErrorCode.NETWORK_TIMEOUT:
+            toast.showToast('error', 'Network Error', {
+              message: swapError.userMessage || 'Unable to connect to the network. Please check your connection and try again.',
+              action: {
+                label: 'Retry',
+                onClick: () => {
+                  if (swapForm.fromToken && swapForm.toToken && swapForm.fromAmount) {
+                    handleSwap();
+                  }
+                }
+              }
+            });
+            break;
+            
+          case SwapErrorCode.TRANSACTION_REJECTED:
+            toast.showToast('warning', 'Transaction Rejected', {
+              message: swapError.userMessage || 'Transaction was rejected by user'
+            });
+            break;
+            
+          case SwapErrorCode.INSUFFICIENT_FUNDS:
+            toast.showToast('error', 'Insufficient Funds', {
+              message: swapError.userMessage || 'Insufficient funds for this transaction'
+            });
+            break;
+            
+          default:
+            // Handle other specific errors or unknown errors
+            const txHash = error?.transactionHash || error?.hash;
+            const explorerUrl = selectedNetwork && txHash ? buildTransactionUrl(selectedNetwork, txHash) : null;
+            
+            toast.showToast('error', 'Swap Failed', {
+              message: swapError.userMessage || 'An unexpected error occurred during the swap',
+              action: explorerUrl ? {
+                label: 'View Transaction',
+                onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+              } : undefined
+            });
+        }
+      } else {
+        // Fallback for non-SwapError errors (legacy handling)
+        const errorMessage = error?.message || error?.toString() || 'Unknown error';
+        const txHash = error?.transactionHash || error?.hash;
+        const explorerUrl = selectedNetwork && txHash ? buildTransactionUrl(selectedNetwork, txHash) : null;
+        
+        toast.showToast('error', 'Swap Failed', {
+          message: txHash ? 'Transaction was submitted but may have failed' : 'An unexpected error occurred during the swap',
+          action: explorerUrl ? {
+            label: 'View Transaction',
+            onClick: () => window.open(explorerUrl, '_blank', 'noopener,noreferrer')
+          } : undefined
+        });
+      }
     } finally {
       // Always unlock swap state when completed (success or fail)
       setSwapCompleted();
@@ -235,6 +343,77 @@ const SwapContainer: React.FC = () => {
   const formatQuotePrice = (quote: any) => {
     if (!quote) return '0';
     return parseFloat(quote.toAmount).toFixed(6);
+  };
+
+  // Check if quote is invalid (0 amount or error cases)  
+  const isQuoteInvalid = () => {
+    if (!hasValidQuote || !quote) return false; // Let other conditions handle this
+    const amount = parseFloat(quote.toAmount || '0');
+    return amount === 0 || isNaN(amount) || amount < 0;
+  };
+
+  // Check if we should show "no route found" state
+  const shouldShowNoRoute = () => {
+    return swapForm.fromToken && swapForm.toToken && swapForm.fromAmount && 
+           !loading.isLoading && !hasValidQuote && !error.hasError;
+  };
+
+  // NoQuoteDisplay component - Professional empty state
+  const NoQuoteDisplay: React.FC<{ type: 'no-route' | 'invalid-quote' | 'empty' | 'loading' }> = ({ type }) => {
+    const getDisplayContent = () => {
+      switch (type) {
+        case 'no-route':
+          return {
+            icon: <AlertTriangle className="w-4 h-4 text-orange-400" />,
+            title: 'No route found',
+            subtitle: 'Try a different amount or token pair',
+            bgColor: 'bg-orange-500/10',
+            borderColor: 'border-orange-500/20',
+            textColor: 'text-orange-400'
+          };
+        case 'invalid-quote':
+          return {
+            icon: <AlertTriangle className="w-4 h-4 text-red-400" />,
+            title: 'Invalid quote',
+            subtitle: 'Unable to calculate trade amount',
+            bgColor: 'bg-red-500/10', 
+            borderColor: 'border-red-500/20',
+            textColor: 'text-red-400'
+          };
+        case 'loading':
+          return {
+            icon: <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />,
+            title: 'Finding best route',
+            subtitle: 'please wait...',
+            bgColor: 'bg-orange-500/5',
+            borderColor: 'border-orange-500/10',
+            textColor: 'text-orange-400'
+          };
+        default:
+          return {
+            icon: <Search className="w-4 h-4 text-gray-400" />,
+            title: 'Enter amount',
+            subtitle: 'to see quote',
+            bgColor: 'bg-gray-800/30',
+            borderColor: 'border-gray-700/30',
+            textColor: 'text-gray-400'
+          };
+      }
+    };
+
+    const content = getDisplayContent();
+
+    return (
+      <div className={`flex items-center justify-center ${content.bgColor} ${content.borderColor} border rounded-lg p-2 sm:p-3`}>
+        <div className="flex items-center space-x-2">
+          {content.icon}
+          <div className="text-xs sm:text-sm">
+            <span className={`font-medium ${content.textColor}`}>{content.title}</span>
+            <span className="text-gray-500 ml-1">{content.subtitle}</span>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -298,6 +477,12 @@ const SwapContainer: React.FC = () => {
                   decimals={swapForm.fromToken?.token.decimals || 18}
                   className="text-lg sm:text-xl md:text-2xl font-bold bg-transparent border-0 p-0 text-white placeholder-gray-500"
                 />
+                {/* USD Value Display */}
+                {swapForm.fromAmount && swapForm.fromToken?.token.priceUsd && (
+                  <div className="text-xs sm:text-sm text-gray-400 mt-1">
+                    ≈ {fromUSDValue}
+                  </div>
+                )}
               </div>
               <div className="flex flex-col items-end">
                 <TokenSelector
@@ -361,14 +546,29 @@ const SwapContainer: React.FC = () => {
           <div className="relative bg-gradient-to-br from-gray-800/70 to-gray-900/50 border border-gray-700/60 rounded-xl sm:rounded-2xl p-2.5 sm:p-3 transition-all duration-300 shadow-lg backdrop-blur-sm">
             <div className="flex items-center space-x-2 sm:space-x-3">
               <div className="flex-1">
-                <TokenInput
-                  value={hasValidQuote ? formatQuotePrice(quote) : ''}
-                  onChange={() => {}} // Read-only for output
-                  placeholder="0.00"
-                  disabled={true}
-                  decimals={swapForm.toToken?.token.decimals || 18}
-                  className="text-lg sm:text-xl md:text-2xl font-bold bg-transparent border-0 p-0 text-gray-300 placeholder-gray-600"
-                />
+                {/* Show NoQuoteDisplay only for loading/empty states in TokenInput */}
+                {loading.isLoading && swapForm.fromAmount && swapForm.fromToken && swapForm.toToken ? (
+                  <NoQuoteDisplay type="loading" />
+                ) : !swapForm.fromAmount || !swapForm.fromToken || !swapForm.toToken ? (
+                  <NoQuoteDisplay type="empty" />
+                ) : (
+                  <>
+                    <TokenInput
+                      value={hasValidQuote && !isQuoteInvalid() ? formatQuotePrice(quote) : ''}
+                      onChange={() => {}} // Read-only for output
+                      placeholder="0.00"
+                      disabled={true}
+                      decimals={swapForm.toToken?.token.decimals || 18}
+                      className="text-lg sm:text-xl md:text-2xl font-bold bg-transparent border-0 p-0 text-gray-300 placeholder-gray-600"
+                    />
+                    {/* USD Value Display */}
+                    {hasValidQuote && !isQuoteInvalid() && swapForm.toToken?.token.priceUsd && (
+                      <div className="text-xs sm:text-sm text-gray-400 mt-1">
+                        ≈ {toUSDValue}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 <TokenSelector
@@ -429,8 +629,35 @@ const SwapContainer: React.FC = () => {
           </div>
         )}
 
-        {/* Quote Info - Enhanced with Countdown */}
-        {hasValidQuote && quote && !loading.isLoading && (
+        {/* Quote Info or Error States */}
+        {swapForm.fromToken && swapForm.toToken && swapForm.fromAmount && !loading.isLoading && (
+          <>
+            {/* Invalid Quote State */}
+            {isQuoteInvalid() ? (
+              <div className="relative p-3 sm:p-4 bg-gradient-to-br from-red-900/20 to-red-800/20 rounded-xl sm:rounded-2xl border border-red-500/30 backdrop-blur-sm shadow-xl">
+                <div className="flex items-center justify-center py-2">
+                  <div className="flex items-center space-x-3">
+                    <AlertTriangle className="w-5 h-5 text-red-400" />
+                    <div>
+                      <div className="text-sm font-semibold text-red-400">Invalid Quote</div>
+                      <div className="text-xs text-gray-400">Unable to calculate trade amount</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : shouldShowNoRoute() ? (
+              <div className="relative p-3 sm:p-4 bg-gradient-to-br from-orange-900/20 to-orange-800/20 rounded-xl sm:rounded-2xl border border-orange-500/30 backdrop-blur-sm shadow-xl">
+                <div className="flex items-center justify-center py-2">
+                  <div className="flex items-center space-x-3">
+                    <AlertTriangle className="w-5 h-5 text-orange-400" />
+                    <div>
+                      <div className="text-sm font-semibold text-orange-400">No Route Found</div>
+                      <div className="text-xs text-gray-400">Try a different amount or token pair</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : hasValidQuote && quote ? (
           <div className="relative p-2.5 sm:p-3 bg-gradient-to-br from-gray-800/70 to-gray-900/50 rounded-xl sm:rounded-2xl border border-gray-700/50 backdrop-blur-sm shadow-xl">
             {/* Quote Header with Countdown */}
             <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -526,6 +753,18 @@ const SwapContainer: React.FC = () => {
                 </div>
               )}
 
+              {/* USD Value Comparison */}
+              {fromUSDValue !== '$0.00' && toUSDValue !== '$0.00' && (
+                <div className="flex items-center justify-between pt-1.5 sm:pt-2 border-t border-gray-700/30">
+                  <span className="text-gray-400 text-[10px] sm:text-xs font-medium">USD value</span>
+                  <div className="flex items-center space-x-1.5 text-right">
+                    <span className="text-gray-300 font-medium text-[10px] sm:text-xs">
+                      {fromUSDValue} → {toUSDValue}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Auto Refresh Notice */}
               {quoteCountdown <= 5 && (
                 <div className="text-center p-1.5 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
@@ -536,6 +775,8 @@ const SwapContainer: React.FC = () => {
               )}
             </div>
           </div>
+            ) : null}
+          </>
         )}
 
         {/* Error Display */}
@@ -575,6 +816,20 @@ const SwapContainer: React.FC = () => {
               className="w-full py-2.5 sm:py-3 text-sm sm:text-base bg-gray-800 text-gray-500 font-semibold rounded-lg sm:rounded-xl cursor-not-allowed border border-gray-700"
             >
               Insufficient Balance
+            </Button>
+          ) : isQuoteInvalid() ? (
+            <Button
+              disabled
+              className="w-full py-2.5 sm:py-3 text-sm sm:text-base bg-red-800/50 text-red-300 font-semibold rounded-lg sm:rounded-xl cursor-not-allowed border border-red-600/50"
+            >
+              Invalid Quote
+            </Button>
+          ) : shouldShowNoRoute() ? (
+            <Button
+              disabled
+              className="w-full py-2.5 sm:py-3 text-sm sm:text-base bg-orange-800/50 text-orange-300 font-semibold rounded-lg sm:rounded-xl cursor-not-allowed border border-orange-600/50"
+            >
+              No Route Available
             </Button>
           ) : !canSwap ? (
             <Button

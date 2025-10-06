@@ -326,6 +326,7 @@ export const useSwap = () => {
       toToken: swapForm.toToken,
       fromAmount: swapForm.fromAmount,
       slippage: swapForm.slippage,
+      chainId: selectedNetwork.chainId, // Add chainId for contract address
       userAddress: walletAddress,
       rpcSettings: effectiveRpcSettings,
       walletConfig,

@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  indexer-worker:
+    build: .
+    container_name: moonx-indexer-worker
+    environment:
+      - MOONX_MONGODB_URL=mongodb://mongo:27017
+      - MOONX_REDIS_URL=${REDIS_PASSWORD:+redis://:${REDIS_PASSWORD}@redis:6379}${REDIS_PASSWORD:-redis://redis:6379}
+      - MOONX_LOG_LEVEL=INFO
+      - MOONX_WORKER_INTERVAL_SECONDS=60
+      - BASE_RPC=${BASE_RPC:-https://mainnet.base.org}
+    depends_on:
+      - mongo
+      - redis
+    restart: unless-stopped
+    networks:
+      - moonx-network
+    volumes:
+      - ./config/chains:/app/config/chains
+      - ./logs:/app/logs
+
+  mongo:
+    image: mongo:7.0
+    container_name: moonx-mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_DATABASE=moonx_indexer
+    volumes:
+      - mongo_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    ports:
+      - "27017:27017"
+    networks:
+      - moonx-network
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: moonx-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - moonx-network
+    # Production security: Uncomment and set password
+    # command: redis-server --appendonly yes --requirepass your_secure_password
+
+networks:
+  moonx-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  redis_data:

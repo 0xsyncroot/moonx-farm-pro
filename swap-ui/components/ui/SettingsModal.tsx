@@ -16,7 +16,7 @@ interface SettingsModalProps {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestartTutorial }) => {
-  const { rpcSettings, networks, setRpcSettings, loadNetworks } = useNetworkState();
+  const { rpcSettings, networks, selectedNetwork, setRpcSettings, loadNetworks } = useNetworkState();
   const { passkeySupported, walletAddress, activeWallet, isConnected, savedWallets, walletConfig, setWalletConfig } = useWalletState();
   const { getSessionConfig, updateSessionConfig, resetSessionConfig, switchWallet } = useWallet();
   const toast = useToast();
@@ -159,7 +159,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestar
         return;
       }
 
-      console.log('🔧 Testing Custom RPC:', rpcUrl);
+      console.log('🔧 Testing Custom RPC:', rpcUrl, 'for network:', selectedNetwork?.name);
 
       const response = await fetch(rpcUrl, {
         method: 'POST',
@@ -217,25 +217,38 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestar
                 <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
                   <Wifi className="w-3.5 h-3.5 text-white" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white">Network Configuration</h3>
-                  <p className="text-xs text-gray-400">Configure RPC endpoints</p>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">Network Configuration</h3>
+                    {selectedNetwork && (
+                      <div className="flex items-center space-x-2 px-2 py-1 bg-orange-500/20 rounded-md">
+                        <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                        <span className="text-orange-400 text-xs font-medium">{selectedNetwork.name}</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400">
+                    {selectedNetwork 
+                      ? `Configure RPC for ${selectedNetwork.name} (Chain ID: ${selectedNetwork.chainId})`
+                      : 'Configure RPC endpoints'
+                    }
+                  </p>
                 </div>
               </div>
           
           <div className="space-y-3">
-            {/* Default Base RPC URL - Read Only */}
+            {/* Default Network RPC URL - Read Only */}
             <div>
               <label className="block text-xs font-medium text-white mb-1.5">
-                Default Base RPC URL
+                Default {selectedNetwork?.name || 'Network'} RPC URL
                 <span className="ml-2 text-xs text-gray-400">(Default)</span>
               </label>
               <div className="relative">
                 <Input
-                  value={tempRpcSettings.baseRpcUrl}
+                  value={selectedNetwork?.defaultRpc || tempRpcSettings.baseRpcUrl}
                   onChange={() => {}} // No-op for disabled field
                   disabled
-                  placeholder="https://mainnet.base.org"
+                  placeholder={selectedNetwork?.rpc || tempRpcSettings.baseRpcUrl || "Loading network RPC..."}
                   className="text-xs font-mono bg-gray-800/50 text-gray-300 cursor-not-allowed"
                 />
                 <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
@@ -243,7 +256,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestar
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-1">
-                Default RPC endpoint for Base network
+                Default RPC endpoint for {selectedNetwork?.name || 'current'} network
               </p>
             </div>
 
@@ -271,7 +284,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestar
               
               <p className="text-xs text-gray-400">
                 {tempRpcSettings.useCustomRpc 
-                  ? "Custom RPC will be used instead of default Base RPC"
+                  ? `Custom RPC will be used instead of default ${selectedNetwork?.name || 'network'} RPC`
                   : "Enable to use your own RPC endpoint"
                 }
               </p>
@@ -663,11 +676,54 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onRestar
           {/* Network Info - Full Width on Large Screens */}
           {networks.length > 0 && (
             <div className="lg:col-span-2">
-              <section className="space-y-2">
+              <section className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-white">Available Networks</h3>
                   <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">{networks.length} networks</span>
                 </div>
+                
+                {/* Current Network Info */}
+                {selectedNetwork && (
+                  <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                        <span className="text-orange-400 font-medium text-sm">Current Network</span>
+                      </div>
+                      <span className="text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded">
+                        Chain ID: {selectedNetwork.chainId}
+                      </span>
+                    </div>
+                    <div className="text-white font-medium text-sm mb-1">{selectedNetwork.name}</div>
+                    <div className="text-gray-300 text-xs">
+                      Currency: {selectedNetwork.currency} • Explorer: {selectedNetwork.explorer?.replace('https://', '') || 'N/A'}
+                    </div>
+                  </div>
+                )}
+                
+                {/* All Networks List */}
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-400 font-medium">All Available Networks:</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {networks.map((network) => (
+                      <div 
+                        key={network.id}
+                        className={`p-2 rounded border text-xs ${
+                          selectedNetwork && network.id === selectedNetwork.id
+                            ? 'border-orange-500/50 bg-orange-500/10 text-orange-400'
+                            : 'border-gray-600/50 bg-gray-800/30 text-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{network.name}</span>
+                          <span className="text-xs opacity-70">ID: {network.chainId}</span>
+                        </div>
+                        <div className="text-xs opacity-70 mt-1">{network.currency}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
                 <div className="text-xs text-gray-400 bg-green-500/10 border border-green-500/20 rounded p-2.5">
                   <div className="flex items-center space-x-2">
                     <Check className="w-3 h-3 text-green-400" />

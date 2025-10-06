@@ -1,0 +1,27 @@
+# Core framework
+fastapi>=0.104.0,<0.105.0
+uvicorn>=0.24.0,<0.25.0
+
+# Data validation and settings  
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.1.0,<3.0.0
+
+# Database and caching
+pymongo>=4.6.0,<5.0.0
+motor>=3.3.0,<4.0.0
+redis>=5.0.0,<6.0.0
+
+# Blockchain and Web3
+web3>=6.15.0,<7.0.0
+
+# HTTP and networking
+aiohttp>=3.9.0,<4.0.0
+
+# Message queue (optional - install latest compatible version)
+aiokafka>=0.8.0,<1.0.0
+
+# Utilities and infrastructure
+tenacity>=8.2.0,<9.0.0
+structlog>=23.2.0,<24.0.0
+click>=8.1.0,<9.0.0
+python-dotenv>=1.0.0,<2.0.0

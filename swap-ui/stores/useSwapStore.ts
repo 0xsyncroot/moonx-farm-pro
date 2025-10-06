@@ -123,7 +123,8 @@ export const useSwapStore = create<SwapStore>()(
             return false;
           }
         } catch (error) {
-          return false;
+          console.log('🔄 Store re-throwing SwapError:', error);
+          throw error; // ✅ Re-throw SwapError để UI có thể handle đúng
         }
       },
 

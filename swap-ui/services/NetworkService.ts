@@ -1,4 +1,5 @@
 import { apiClient } from '@/libs/api';
+import { isChainSupported } from '@/libs/moonx';
 import type { Network, ServiceResult } from '@/types/api';
 
 export type NetworkServiceResult<T> = ServiceResult<T>;
@@ -41,20 +42,37 @@ export class NetworkService {
         throw new Error('No networks available');
       }
 
-      // Update cache
-      this.cache.networks = result.networks;
+      // Filter networks to only include those supported by MoonX contracts
+      const supportedNetworks = result.networks.filter(network => {
+        const isSupported = isChainSupported(network.chainId);
+        if (!isSupported) {
+          console.warn(`⚠️ Network ${network.name} (${network.chainId}) not supported by MoonX contracts`);
+        }
+        return isSupported;
+      });
+
+      if (supportedNetworks.length === 0) {
+        throw new Error('No supported networks available');
+      }
+
+      // Update cache with supported networks only
+      this.cache.networks = supportedNetworks;
       this.cache.timestamp = Date.now();
+
+      console.log(`✅ Loaded ${supportedNetworks.length} supported networks:`, 
+        supportedNetworks.map(n => `${n.name} (${n.chainId})`).join(', ')
+      );
 
       return {
         success: true,
-        data: result.networks
+        data: supportedNetworks
       };
     } catch (error) {
       // Return fallback Base network if API fails
       const fallbackNetworks: Network[] = [{
+        id: 'base',
         name: 'Base',
         chainId: 8453,
-        rpc: 'https://mainnet.base.org',
         currency: 'ETH',
         multicall3Address: '0xcA11bde05977b3631167028862bE2a173976CA11',
         logoUrl: 'https://raw.githubusercontent.com/base/brand-kit/refs/heads/main/logo/TheSquare/Digital/Base_square_blue.png',
@@ -70,10 +88,11 @@ export class NetworkService {
   }
 
   /**
-   * Get default network (prioritize Base network)
+   * Get default network (prioritize Base network by id, then first available)
    */
   getDefaultNetwork(networks: Network[]): Network {
-    const baseNetwork = networks.find(network => network.chainId === 8453);
+    // Try to find Base network first by id (most reliable)
+    const baseNetwork = networks.find(network => network.id === 'base');
     return baseNetwork || networks[0];
   }
 

@@ -1,0 +1,30 @@
+# Stable versions that are known to work together
+# Use this if you encounter version conflicts
+
+# Core framework
+fastapi==0.104.1
+uvicorn==0.24.0
+
+# Data validation and settings  
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database and caching
+pymongo==4.6.0
+motor==3.3.2
+redis==5.0.1
+
+# Blockchain and Web3
+web3==6.15.1
+
+# HTTP and networking
+aiohttp==3.9.1
+
+# Message queue (optional) - use a more common version
+aiokafka==0.7.2
+
+# Utilities and infrastructure
+tenacity==8.2.3
+structlog==23.2.0
+click==8.1.7
+python-dotenv==1.0.0

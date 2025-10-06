@@ -27,6 +27,8 @@ import { ethers } from 'ethers';
 import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { secureSigner } from './secure-signer';
 import { WalletPreference, getWalletsByPreference } from '../hooks/usePrivyWallet';
+import { SwapErrorFactory } from '@/types/errors';
+
 
 export interface RPCSettings {
   baseRpcUrl: string;
@@ -97,7 +99,7 @@ export class UnifiedWalletProvider {
   async requestConnection(): Promise<string[]> {
     if (this.config.walletType === 'private') {
       if (!secureSigner.hasActiveSession()) {
-        throw new Error('No active wallet session. Please authenticate your wallet.');
+        throw SwapErrorFactory.createAuthenticationRequiredError();
       }
       return ['private_key_account'];
     } else if (this.config.walletType === 'privy') {
@@ -109,36 +111,33 @@ export class UnifiedWalletProvider {
         } catch (requestError) {
           const error = requestError as any;
           if (error.code === 4001) {
-            throw new Error('User rejected wallet connection');
+            throw SwapErrorFactory.createTransactionRejectedError(error);
           } else if (error.code === -32002) {
-            throw new Error('Wallet connection request already pending');
+            throw SwapErrorFactory.createWalletConnectionLostError(error);
           } else {
-            throw new Error('Failed to connect wallet: ' + (error.message || 'Unknown error'));
+            throw SwapErrorFactory.createWalletConnectionLostError(error);
           }
         }
       } else {
-        throw new Error('No web3 provider found. Please install MetaMask or another wallet.');
+        throw SwapErrorFactory.createWalletNotFoundError();
       }
     }
-    throw new Error('Invalid wallet configuration');
+    throw SwapErrorFactory.createWalletNotFoundError();
   }
 
   // ✅ SECURE: Initialize signer with proper Privy verification
   async initializeSigner(): Promise<ethers.Signer> {
     if (this.config.walletType === 'private') {
       if (!secureSigner.hasActiveSession()) {
-        throw new Error('No active wallet session. Please authenticate your wallet.');
+        throw SwapErrorFactory.createAuthenticationRequiredError();
       }
       
       this.signer = await secureSigner.createProviderWallet(this.provider);
-      if (!this.signer) {
-        throw new Error('Failed to create secure wallet signer');
-      }
-      return this.signer;
+      return this.signer!
     } else if (this.config.walletType === 'privy') {
       // ✅ SECURITY: Verify Privy authentication first
       if (!this.config.privyAuthenticated || !this.config.privyUser) {
-        throw new Error('User not authenticated with Privy. Please login first.');
+        throw SwapErrorFactory.createWalletNotFoundError();
       }
       
       // ✅ SECURITY: Verify user has external wallets connected
@@ -148,7 +147,7 @@ export class UnifiedWalletProvider {
       );
       
       if (externalWallets.length === 0) {
-        throw new Error('No external wallets connected through Privy. Please connect a wallet first.');
+        throw SwapErrorFactory.createWalletNotFoundError();
       }
       // Use active wallet instance if available, otherwise get first external wallet
       const activeWallet = this.config.activeWalletInstance || externalWallets.find(async wallet => await wallet.isConnected());
@@ -156,7 +155,7 @@ export class UnifiedWalletProvider {
         // Get chainId from config (from selectedNetwork)
         const chainId = this.config.chainId // Default to mainnet if not provided
         if (!chainId) {
-          throw new Error('No chainId provided');
+          throw SwapErrorFactory.createWalletConnectionLostError();
         }
         
         // Switch chain if needed (Privy handles this properly)
@@ -167,7 +166,7 @@ export class UnifiedWalletProvider {
         // Get Ethereum provider from Privy wallet (this is the correct way)
         const ethereumProvider = await activeWallet.getEthereumProvider();
         if (!ethereumProvider) {
-          throw new Error(`Failed to get Ethereum provider for wallet ${activeWallet.walletClientType}`);
+          throw SwapErrorFactory.createWalletConnectionLostError();
         }
         
         // Create ethers provider from Privy's Ethereum provider
@@ -177,53 +176,42 @@ export class UnifiedWalletProvider {
         
         // ✅ CRITICAL SECURITY: Verify signer address matches the expected Privy wallet
         if (signerAddress.toLowerCase() !== activeWallet.address.toLowerCase()) {
-          throw new Error(
-            `Wallet address mismatch. Expected ${activeWallet.address}, got ${signerAddress}. ` +
-            'Please switch to the correct account in your wallet or reconnect through Privy.'
-          );
+          throw SwapErrorFactory.createWalletConnectionLostError();
         }
         
         this.signer = signer;
         return this.signer;
         
       } catch (error: any) {
-        // Enhanced error handling for common wallet issues
-        if (error.code === 4001 || error.message.includes('user rejected')) {
-          throw new Error(
-            'Wallet connection was rejected. Please approve the connection request and try again.'
-          );
-        }
-        
-        if (error.code === -32002) {
-          throw new Error(
-            'Wallet connection request is already pending. Please check your wallet.'
-          );
-        }
-        
-        if (error.message.includes('no accounts') || error.message.includes('wallet must has at least one account')) {
-          throw new Error(
-            'No accounts found in wallet. Please unlock your wallet and ensure at least one account is available.'
-          );
-        }
-        
-        // If it's already our custom error, don't wrap it
-        if (error.message.includes('Wallet address mismatch') || 
-            error.message.includes('Failed to get Ethereum provider')) {
+        // If it's already a SwapError, re-throw it
+        if (error.code) {
           throw error;
         }
         
-        throw new Error(
-          `Failed to connect to ${activeWallet.walletClientType} wallet: ${error.message}`
-        );
+        // Enhanced error handling for common wallet issues
+        if (error.code === 4001 || error.message.includes('user rejected')) {
+          throw SwapErrorFactory.createTransactionRejectedError(error);
+        }
+        
+        if (error.code === -32002) {
+          throw SwapErrorFactory.createWalletConnectionLostError(error);
+        }
+        
+        if (error.message.includes('no accounts') || error.message.includes('wallet must has at least one account')) {
+          throw SwapErrorFactory.createWalletNotFoundError(error);
+        }
+        
+        // Default to wallet connection lost for unknown Privy errors
+        throw SwapErrorFactory.createWalletConnectionLostError(error);
       }
     }
-    throw new Error('Invalid wallet configuration');
+    throw SwapErrorFactory.createWalletNotFoundError();
   }
 
   // Get current signer
   getSigner(): ethers.Signer {
     if (!this.signer) {
-      throw new Error('Signer not initialized. Call initializeSigner() first.');
+      throw SwapErrorFactory.createAuthenticationRequiredError();
     }
     return this.signer;
   }
@@ -390,9 +378,9 @@ export const useUnifiedWallet = (walletPreference: WalletPreference = 'external-
   };
 };
 
-// Default RPC settings for Base network
+// Default RPC settings - will be updated dynamically from selected network
 export const DEFAULT_RPC_SETTINGS: RPCSettings = {
-  baseRpcUrl: 'https://mainnet.base.org',
+  baseRpcUrl: '', // Will be set from selectedNetwork.rpc
   customRpcUrl: undefined,
   useCustomRpc: false,
 };

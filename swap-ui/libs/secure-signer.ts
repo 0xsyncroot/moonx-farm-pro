@@ -26,7 +26,7 @@ export class SecureSigner {
   /**
    * Get private key from session with active wallet
    */
-  private async getPrivateKey(): Promise<string | null> {
+  private async getPrivateKey(): Promise<string> {
     if (!this.activeWallet) {
       throw new Error('No active wallet - please set wallet first');
     }
@@ -38,10 +38,7 @@ export class SecureSigner {
    */
   async signTransaction(transaction: TransactionRequest): Promise<string> {
     const privateKey = await this.getPrivateKey();
-    if (!privateKey) {
-      throw new Error('Authentication required - please unlock wallet');
-    }
-
+    // getPrivateKey now throws SwapError instead of returning null
     const wallet = new ethers.Wallet(privateKey);
     return await wallet.signTransaction(transaction);
   }
@@ -51,10 +48,7 @@ export class SecureSigner {
    */
   async signMessage(message: string): Promise<string> {
     const privateKey = await this.getPrivateKey();
-    if (!privateKey) {
-      throw new Error('Authentication required - please unlock wallet');
-    }
-
+    // getPrivateKey now throws SwapError instead of returning null
     const wallet = new ethers.Wallet(privateKey);
     return await wallet.signMessage(message);
   }
@@ -68,10 +62,7 @@ export class SecureSigner {
     value: Record<string, any>
   ): Promise<string> {
     const privateKey = await this.getPrivateKey();
-    if (!privateKey) {
-      throw new Error('Authentication required - please unlock wallet');
-    }
-
+    // getPrivateKey now throws SwapError instead of returning null
     const wallet = new ethers.Wallet(privateKey);
     return await wallet.signTypedData(domain, types, value);
   }
@@ -86,13 +77,11 @@ export class SecureSigner {
   /**
    * Create provider wallet for read/write operations
    */
-  async createProviderWallet(provider: ethers.Provider): Promise<ethers.Wallet | null> {
+  async createProviderWallet(provider: ethers.Provider): Promise<ethers.Wallet> {
     const privateKey = await this.getPrivateKey();
-    if (!privateKey) {
-      return null;
-    }
-
-    return new ethers.Wallet(privateKey, provider);
+    // getPrivateKey now throws SwapError instead of returning null
+    // so privateKey will always be truthy if we reach this point
+    return new ethers.Wallet(privateKey!, provider);
   }
 
   /**

@@ -22,7 +22,7 @@ export interface SpecificTokenParams {
 export class TokenService {
   private static instance: TokenService;
   private cache: Map<string, { data: TokenBalance[]; timestamp: number }> = new Map();
-  private readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes (shorter than networks since balances can change)
+  private readonly CACHE_TTL = 30 * 1000; // 30 seconds (shorter than networks since balances can change)
 
   private constructor() {}
 
@@ -220,6 +220,40 @@ export class TokenService {
     return tokens.find(t => 
       t.token.address.toLowerCase() === tokenAddress.toLowerCase()
     ) || null;
+  }
+
+  /**
+   * Calculate USD value for a token balance
+   */
+  calculateUSDValue(tokenBalance: TokenBalance): number {
+    if (!tokenBalance.token.priceUsd || !tokenBalance.formattedBalance) {
+      return 0;
+    }
+    
+    const balance = parseFloat(tokenBalance.formattedBalance);
+    return balance * tokenBalance.token.priceUsd;
+  }
+
+  /**
+   * Calculate total USD value for multiple token balances
+   */
+  calculateTotalUSDValue(tokens: TokenBalance[]): number {
+    return tokens.reduce((total, token) => {
+      return total + this.calculateUSDValue(token);
+    }, 0);
+  }
+
+  /**
+   * Format USD value to readable string
+   */
+  formatUSDValue(usdValue: number): string {
+    if (usdValue === 0) return '$0.00';
+    if (usdValue < 0.01) return '<$0.01';
+    if (usdValue < 1) return `$${usdValue.toFixed(3)}`;
+    if (usdValue < 1000) return `$${usdValue.toFixed(2)}`;
+    if (usdValue < 1000000) return `$${(usdValue / 1000).toFixed(2)}K`;
+    if (usdValue < 1000000000) return `$${(usdValue / 1000000).toFixed(2)}M`;
+    return `$${(usdValue / 1000000000).toFixed(2)}B`;
   }
 
   /**

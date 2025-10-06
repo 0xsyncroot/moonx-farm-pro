@@ -8,6 +8,8 @@ Backend service cho MoonX Swap DApp, cung cấp APIs để fetch networks, token
 - Node.js >= 18.0.0
 - npm hoặc yarn
 - TypeScript
+- MongoDB (for token indexer data)
+- Redis (for caching)
 
 ### Installation
 
@@ -40,6 +42,13 @@ Tạo file `.env` với các biến sau:
 PORT=3001
 HOST=0.0.0.0
 
+# Database Configuration
+# MongoDB connection string for token indexer data (from coin-indexer-worker)
+MONGODB_URI=mongodb://localhost:27017/moonx_indexer
+
+# Redis connection string for caching pool information and token prices
+REDIS_URL=redis://localhost:6379
+
 # Blockchain RPCs - Configure for networks you want to support
 BASE_RPC_URL=https://mainnet.base.org
 ETHEREUM_RPC_URL=https://eth.llamarpc.com
@@ -66,6 +75,8 @@ CACHE_TTL_TOKENS=120000    # 2 minutes
 |----------|----------|---------|-------------|
 | `PORT` | No | 3001 | Port server sẽ listen |
 | `HOST` | No | 0.0.0.0 | Host address để bind |
+| `MONGODB_URI` | No | mongodb://localhost:27017/moonx_indexer | MongoDB connection cho token data từ indexer |
+| `REDIS_URL` | No | redis://localhost:6379 | Redis connection cho caching pool info + prices |
 | `BASE_RPC_URL` | Yes | - | RPC URL cho Base mainnet |
 | `ETHEREUM_RPC_URL` | No | - | RPC URL cho Ethereum mainnet |
 | `BASE_SEPOLIA_RPC_URL` | No | - | RPC URL cho Base testnet |
@@ -74,6 +85,54 @@ CACHE_TTL_TOKENS=120000    # 2 minutes
 | `MOONX_POLYGON_CONTRACT_ADDRESS` | No | - | MoonX contract address trên Polygon |
 | `CORS_ORIGIN` | No | * | CORS origin settings |
 | `LOG_LEVEL` | No | info | Log level (error, warn, info, debug) |
+
+## 🗄️ Database Setup
+
+### MongoDB Requirements
+
+Backend cần MongoDB với token data từ `coin-indexer-worker`. MongoDB chứa:
+
+- **Collection `tokens`**: Token information với pool data
+- **Collection `indexer_progress`**: Indexing progress tracking
+
+**Setup MongoDB:**
+```bash
+# Run MongoDB locally
+docker run -d --name mongodb -p 27017:27017 mongo:latest
+
+# Hoặc use cloud MongoDB Atlas
+# Set MONGODB_URI in .env
+```
+
+**Database Schema**: Xem `workers/coin-indexer-worker/DATABASE_SCHEMA.md` để hiểu schema chi tiết.
+
+### Redis Requirements
+
+Redis được sử dụng cho caching:
+- **Pool information**: 5 minutes TTL
+- **Token prices**: 1 minute TTL
+
+**Setup Redis:**
+```bash
+# Run Redis locally
+docker run -d --name redis -p 6379:6379 redis:latest
+
+# Hoặc use cloud Redis
+# Set REDIS_URL in .env
+```
+
+**Cache Keys Structure:**
+```
+moonx:pool:{chainId}:{tokenAddress}  # Pool information
+moonx:price:{chainId}:{tokenAddress} # Token prices
+```
+
+### Optional: Run without Database
+
+Backend có thể chạy without MongoDB/Redis nhưng sẽ mất các features:
+- ❌ Pool information từ database
+- ❌ Price caching (mọi request sẽ call external APIs)
+- ✅ Basic swap quote generation vẫn work
 
 ## 📡 API Documentation
 
@@ -103,8 +162,8 @@ Kiểm tra trạng thái server
 |--------|----------|-------------|
 | GET | `/health` | Health check |
 | GET | `/api/networks` | Get supported networks |
-| GET | `/api/tokens` | Get tokens with balances (with search & filter) |
-| GET | `/api/tokens/specific` | Get specific tokens with balances (optimized) |
+| GET | `/api/tokens` | Get tokens with balances + real-time prices |
+| GET | `/api/tokens/specific` | Get specific tokens with balances + prices (optimized) |
 | POST | `/api/quote` | Get swap quote with calldata |
 
 ---
@@ -171,7 +230,10 @@ GET /api/tokens?chainId=8453&search=USDC&userAddress=0x742d35cc6634C0532925a3b8D
           "name": "USD Coin",
           "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
           "decimals": 6,
-          "logoURI": "https://..."
+          "logoURI": "https://...",
+          "priceUsd": 1.0,
+          "priceChange24h": 0.05,
+          "volume24h": 50000000
         },
         "balance": "1000000",
         "formattedBalance": "1.0"
@@ -220,7 +282,10 @@ GET /api/tokens/specific?chainId=8453&userAddress=0x742d35cc6634C0532925a3b8D07d
           "name": "USD Coin",
           "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
           "decimals": 6,
-          "logoURI": "https://..."
+          "logoURI": "https://...",
+          "priceUsd": 1.0,
+          "priceChange24h": 0.05,
+          "volume24h": 50000000
         },
         "balance": "1000000",
         "formattedBalance": "1.0"
@@ -231,7 +296,10 @@ GET /api/tokens/specific?chainId=8453&userAddress=0x742d35cc6634C0532925a3b8D07d
           "name": "Ethereum",
           "address": "0x0000000000000000000000000000000000000000",
           "decimals": 18,
-          "logoURI": "https://..."
+          "logoURI": "https://...",
+          "priceUsd": 3500.0,
+          "priceChange24h": -2.5,
+          "volume24h": 1000000000
         },
         "balance": "2000000000000000000",
         "formattedBalance": "2.0"
@@ -255,6 +323,30 @@ GET /api/tokens/specific?chainId=8453&userAddress=0x742d35cc6634C0532925a3b8D07d
   "error": "At least one token address is required"
 }
 ```
+
+---
+
+### Token Price Information
+
+Tất cả token responses đều bao gồm real-time price data:
+
+**Price Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `priceUsd` | number | Current price in USD |
+| `priceChange24h` | number | Price change percentage in last 24h |
+| `volume24h` | number | Trading volume in last 24h (USD) |
+
+**Price Data Sources:**
+- **Binance API**: Cho common tokens (ETH, USDC, USDT, DAI, WETH) - faster response
+- **DexScreener API**: Cho các tokens khác (ZORA, VIRTUAL, creator tokens, etc.)
+- **USDT Special**: Luôn return 1.0 (không call API)
+- **Caching**: Redis cache 1 phút để optimize performance
+
+**Notes:**
+- Price data được fetch song song với balance data
+- Nếu không lấy được price → fields sẽ là `undefined`
+- USDT price luôn stable = 1.0 USD
 
 ---
 
@@ -403,6 +495,10 @@ console.log('Swap completed:', receipt.hash);
 
 4. **Utils** (`src/utils/`)
    - `contracts.ts`: Contract ABIs and helpers
+   - `price-service.ts`: Token price fetching từ Binance & DexScreener
+   - `redis.ts`: Redis caching management
+   - `mongodb.ts`: MongoDB connection và token queries  
+   - `pool-cache.ts`: Combined pool caching service (Redis + MongoDB)
 
 ### Key Features
 
@@ -410,7 +506,11 @@ console.log('Swap completed:', receipt.hash);
 - ✅ **Referral System**: Ready for referral implementation (currently disabled)
 - ✅ **Multi-chain Support**: Configurable contract addresses per network
 - ✅ **Environment-based Config**: Contract addresses từ env variables
-- ✅ **Caching**: Smart caching cho networks (10 min) và tokens (2 min)
+- ✅ **Real-time Price Data**: Token prices từ Binance & DexScreener APIs
+- ✅ **Smart Price Routing**: Common tokens → Binance, others → DexScreener
+- ✅ **Redis Caching**: Pool info (5 minutes) & prices (1 minute) caching
+- ✅ **MongoDB Integration**: Pool information từ coin-indexer-worker
+- ✅ **Database Fallback**: Quote generation từ database khi pool key fails
 - ✅ **Error Handling**: Comprehensive error messages
 - ✅ **Type Safety**: Full TypeScript support
 - ✅ **Security**: No private keys - client-side signing only
@@ -465,13 +565,22 @@ curl -X POST http://localhost:3001/api/quote \
 swap-backend/
 ├── src/
 │   ├── controllers/     # HTTP request handlers
-│   ├── services/        # Business logic
-│   ├── repositories/    # Data access layer
-│   ├── utils/          # Helper functions
+│   │   └── SwapController.ts
+│   ├── services/        # Business logic  
+│   │   └── SwapService.ts
+│   ├── repositories/    # Blockchain interactions
+│   │   └── BlockchainRepository.ts
+│   ├── utils/          # Helper functions & services
+│   │   ├── contracts.ts        # Contract ABIs
+│   │   ├── price-service.ts    # Price fetching (Binance + DexScreener)
+│   │   ├── redis.ts           # Redis caching management
+│   │   ├── mongodb.ts         # MongoDB queries
+│   │   └── pool-cache.ts      # Combined caching service
 │   ├── config/         # Configuration files
+│   │   └── networks.ts        # Network + token configs
 │   ├── types/          # TypeScript interfaces
+│   │   └── index.ts
 │   └── server.ts       # Entry point
-├── .env.example        # Environment template
 ├── package.json        # Dependencies
 ├── tsconfig.json       # TypeScript config
 └── README.md          # This file

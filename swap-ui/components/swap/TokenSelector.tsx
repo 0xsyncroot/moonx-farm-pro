@@ -388,7 +388,7 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
         onClose={handleModalClose}
         size="2xl"
       >
-        <div className="flex flex-col min-h-[500px] max-h-[80vh]">
+        <div className="flex flex-col h-[600px] max-h-[85vh]">
           {/* Header */}
           <div className="pb-4 sm:pb-5 border-b border-gray-700/40">
             <div className="flex items-center justify-between">
@@ -456,8 +456,8 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
             )}
           </div>
 
-          {/* Token List Container */}
-          <div className="flex-1 overflow-hidden">
+          {/* Token List Container - Fixed height for proper scrolling */}
+          <div className="flex-1 overflow-hidden min-h-0">
             {(isInitialLoading || (isSearching && searchTerm.length >= 2)) ? (
               <div className="space-y-1 sm:space-y-2 px-1">
                 {Array.from({ length: isSearching ? 4 : 8 }).map((_, i) => (
@@ -498,71 +498,79 @@ const TokenSelector: React.FC<TokenSelectorProps> = ({
                 onCancel={() => setShowImportForm(false)}
               />
             ) : (
-              <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-                {filteredTokens.length > 0 ? (
-                  <div className="space-y-1 px-1">
-                    {/* Popular Tokens Section */}
-                    {!searchTerm && popularTokens.length > 0 && (
-                      <div className="mb-4">
-                        <div className="flex items-center space-x-2 mb-3 px-1">
-                          <Star className="w-4 h-4 text-orange-400" />
-                          <span className="text-sm font-medium text-gray-200">Popular</span>
+              <div className="h-full overflow-hidden overscroll-contain">
+                <div 
+                  className="h-full overflow-y-auto pr-4 -mr-4"
+                  style={{
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                  }}
+                >
+                  {filteredTokens.length > 0 ? (
+                    <div className="space-y-0.5 px-1 pb-4">
+                      {/* Popular Tokens Section */}
+                      {!searchTerm && popularTokens.length > 0 && (
+                        <div className="mb-4">
+                          <div className="flex items-center space-x-2 mb-3 px-1">
+                            <Star className="w-4 h-4 text-orange-400" />
+                            <span className="text-sm font-medium text-gray-200">Popular</span>
+                          </div>
+                          <div className="space-y-0.5">
+                            {popularTokens.map((token) => (
+                              <ModernTokenRow
+                                key={`popular-${token.token.address}`}
+                                token={token}
+                                onSelect={handleSelectToken}
+                                showBalance={showBalance}
+                                isPopular={true}
+                                onRemove={customTokens.some(ct => ct.address.toLowerCase() === token.token.address.toLowerCase()) 
+                                  ? () => handleRemoveCustomToken(token.token.address) 
+                                  : undefined}
+                              />
+                            ))}
+                          </div>
+                          
+                          {otherTokens.length > 0 && (
+                            <div className="border-t border-gray-700/20 my-4"></div>
+                          )}
                         </div>
-                        <div className="space-y-1">
-                          {popularTokens.map((token) => (
-                            <ModernTokenRow
-                              key={`popular-${token.token.address}`}
-                              token={token}
-                              onSelect={handleSelectToken}
-                              showBalance={showBalance}
-                              isPopular={true}
-                              onRemove={customTokens.some(ct => ct.address.toLowerCase() === token.token.address.toLowerCase()) 
-                                ? () => handleRemoveCustomToken(token.token.address) 
-                                : undefined}
-                            />
-                          ))}
-                        </div>
-                        
-                        {otherTokens.length > 0 && (
-                          <div className="border-t border-gray-700/20 my-4"></div>
-                        )}
-                      </div>
-                    )}
+                      )}
 
-                    {/* All Tokens or Search Results */}
-                    <div className="grid gap-1">
-                      {(searchTerm ? filteredTokens : otherTokens).map((token) => (
-                        <ModernTokenRow
-                          key={token.token.address}
-                          token={token}
-                          onSelect={handleSelectToken}
-                          showBalance={showBalance}
-                          isPopular={false}
-                          onRemove={customTokens.some(ct => ct.address.toLowerCase() === token.token.address.toLowerCase()) 
-                            ? () => handleRemoveCustomToken(token.token.address) 
-                            : undefined}
-                        />
-                      ))}
+                      {/* All Tokens or Search Results */}
+                      <div className="space-y-0.5">
+                        {(searchTerm ? filteredTokens : otherTokens).map((token) => (
+                          <ModernTokenRow
+                            key={token.token.address}
+                            token={token}
+                            onSelect={handleSelectToken}
+                            showBalance={showBalance}
+                            isPopular={false}
+                            onRemove={customTokens.some(ct => ct.address.toLowerCase() === token.token.address.toLowerCase()) 
+                              ? () => handleRemoveCustomToken(token.token.address) 
+                              : undefined}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : shouldShowImportOption ? (
-                  <ImportOption
-                    address={searchTerm}
-                    onImport={handleImportByAddress}
-                  />
-                ) : searchTerm ? (
-                  <EmptyState
-                    searchTerm={searchTerm}
-                    onClearSearch={() => setSearchTerm('')}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-32 sm:h-40 space-y-2 sm:space-y-3">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-700/50 rounded-xl sm:rounded-2xl flex items-center justify-center">
-                      <Search className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
+                  ) : shouldShowImportOption ? (
+                    <ImportOption
+                      address={searchTerm}
+                      onImport={handleImportByAddress}
+                    />
+                  ) : searchTerm ? (
+                    <EmptyState
+                      searchTerm={searchTerm}
+                      onClearSearch={() => setSearchTerm('')}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 sm:py-20 space-y-3 sm:space-y-4">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-700/50 rounded-xl sm:rounded-2xl flex items-center justify-center">
+                        <Search className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
+                      </div>
+                      <p className="text-gray-400 text-sm sm:text-base">Search for tokens to get started</p>
                     </div>
-                    <p className="text-gray-400 text-xs sm:text-sm">Search for tokens to get started</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -594,7 +602,7 @@ const ModernTokenRow: React.FC<ModernTokenRowProps> = ({
     <div className="group relative">
       <button
         onClick={() => onSelect(token)}
-        className="w-full p-2 sm:p-3 hover:bg-gray-800/40 rounded-lg sm:rounded-xl transition-all duration-200 border border-transparent hover:border-gray-600/50 group"
+        className="w-full p-2.5 sm:p-3.5 hover:bg-gray-800/50 rounded-lg sm:rounded-xl transition-all duration-200 border border-transparent hover:border-gray-600/40 group hover:shadow-sm"
       >
         <div className="flex items-center justify-between w-full gap-2 sm:gap-3">
           {/* Left: Token Logo & Info */}
@@ -651,36 +659,60 @@ const ModernTokenRow: React.FC<ModernTokenRowProps> = ({
             </div>
           </div>
           
-          {/* Right: Balance Display */}
+          {/* Right: Price & Balance Display - Jupiter Style */}
           <div className="flex items-start space-x-1.5 sm:space-x-2.5 flex-shrink-0">
-            <div className="text-right min-w-[60px] sm:min-w-[80px]">
-              {showBalance ? (
-                <div className="flex items-center justify-end space-x-1 sm:space-x-2">
-                  {parseFloat(token.formattedBalance) > 0 && (
-                    <Wallet className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                  )}
-                  <div className="text-right">
+            <div className="text-right min-w-[80px] sm:min-w-[100px]">
+              {/* Always show price info if available */}
+              {token.token.priceUsd ? (
+                <div className="space-y-0.5">
+                  {/* Price Line */}
+                  <div className="flex items-center justify-end space-x-1">
                     <div className="text-white font-medium text-xs sm:text-sm">
-                      {parseFloat(token.formattedBalance) > 0 ? formatBalance(token.formattedBalance) : '0'}
-                    </div>
-                    <div className="text-[10px] sm:text-xs text-gray-400">
-                      {token.token.symbol}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                token.token.price ? (
-                  <>
-                    <div className="text-white font-medium text-xs sm:text-sm">
-                      {formatPrice(token.token.price)}
+                      {formatPrice(token.token.priceUsd)}
                     </div>
                     {priceChange && (
-                      <div className={`text-[10px] sm:text-xs flex items-center justify-end space-x-1 ${priceChange.color}`}>
+                      <div className={`flex items-center space-x-0.5 ${priceChange.color}`}>
                         {priceChange.icon}
-                        <span>{priceChange.text}</span>
+                        <span className="text-[9px] sm:text-[10px] font-medium">{priceChange.text}</span>
                       </div>
                     )}
-                  </>
+                  </div>
+                  
+                  {/* Balance Line (if showBalance and has balance) */}
+                  {showBalance && (
+                    <div className="flex items-center justify-end space-x-1">
+                      {parseFloat(token.formattedBalance) > 0 && (
+                        <Wallet className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500 flex-shrink-0" />
+                      )}
+                      <div className="text-[10px] sm:text-xs text-gray-400">
+                        {parseFloat(token.formattedBalance) > 0 ? formatBalance(token.formattedBalance) : '0'} {token.token.symbol}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Volume info (only if no balance shown to save space) */}
+                  {!showBalance && token.token.volume24h && (
+                    <div className="text-[9px] sm:text-[10px] text-gray-500">
+                      Vol: ${formatLargeNumber(token.token.volume24h)}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Fallback: Only balance if no price */
+                showBalance ? (
+                  <div className="flex items-center justify-end space-x-1">
+                    {parseFloat(token.formattedBalance) > 0 && (
+                      <Wallet className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500 flex-shrink-0" />
+                    )}
+                    <div className="text-right">
+                      <div className="text-white font-medium text-xs sm:text-sm">
+                        {parseFloat(token.formattedBalance) > 0 ? formatBalance(token.formattedBalance) : '0'}
+                      </div>
+                      <div className="text-[10px] sm:text-xs text-gray-400">
+                        {token.token.symbol}
+                      </div>
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-[10px] sm:text-xs text-gray-400">
                     {token.token.symbol}
@@ -828,7 +860,7 @@ interface ImportOptionProps {
 
 const ImportOption: React.FC<ImportOptionProps> = ({ address, onImport }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-56 sm:h-64 space-y-4 sm:space-y-6 px-4">
+    <div className="flex flex-col items-center justify-center py-16 sm:py-20 space-y-4 sm:space-y-6 px-4">
       <div className="text-center">
         <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 bg-gradient-to-r from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
           <Plus className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
@@ -864,7 +896,7 @@ interface EmptyStateProps {
 
 const EmptyState: React.FC<EmptyStateProps> = ({ searchTerm, onClearSearch }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-56 sm:h-72 space-y-4 sm:space-y-6 px-4">
+    <div className="flex flex-col items-center justify-center py-16 sm:py-20 space-y-4 sm:space-y-6 px-4">
       <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-gray-700 to-gray-800 rounded-2xl sm:rounded-3xl flex items-center justify-center shadow-lg">
         <Search className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
       </div>

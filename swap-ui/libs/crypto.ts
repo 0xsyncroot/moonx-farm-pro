@@ -1,4 +1,5 @@
 import CryptoJS from 'crypto-js';
+import { SwapErrorFactory } from '@/types/errors';
 
 // Global types for secure key storage
 declare global {
@@ -591,7 +592,7 @@ export async function createDecryptionSession(wallet: EncryptedWallet): Promise<
     }
     
         if (!authenticated) {
-      throw new Error('Authentication failed - access denied');
+      throw SwapErrorFactory.createAuthenticationRequiredError();
     }
     
     // Generate session decryption key (hardware-backed if possible)
@@ -611,7 +612,7 @@ export async function decryptPrivateKeyWithSession(wallet: EncryptedWallet, sess
     // Verify session is still valid
     const sessionKey = getSessionDecryptionKey(sessionKeyRef);
     if (!sessionKey) {
-      throw new Error('Invalid or expired session - authentication required');
+      throw SwapErrorFactory.createSessionExpiredError();
     }
     
     const { data, hmac, version = 'v3', deviceFingerprint } = JSON.parse(wallet.encryptedData);
@@ -625,7 +626,7 @@ export async function decryptPrivateKeyWithSession(wallet: EncryptedWallet, sess
     if (deviceFingerprint) {
       const currentFingerprint = generateDeviceFingerprint();
       if (deviceFingerprint !== currentFingerprint) {
-        throw new Error('Device fingerprint mismatch - re-authentication required');
+        throw SwapErrorFactory.createDeviceFingerprintMismatchError();
       }
     }
     
@@ -646,7 +647,7 @@ export async function decryptPrivateKeyWithSession(wallet: EncryptedWallet, sess
     if (hmac) {
       const expectedHmac = CryptoJS.HmacSHA256(data, encryptionKey).toString();
       if (hmac !== expectedHmac) {
-      throw new Error('Data integrity check failed');
+        throw SwapErrorFactory.createPrivateKeyDecryptError();
       }
     }
     
@@ -655,18 +656,18 @@ export async function decryptPrivateKeyWithSession(wallet: EncryptedWallet, sess
     const privateKey = decrypted.toString(CryptoJS.enc.Utf8);
     
     if (!privateKey) {
-      throw new Error('Failed to decrypt private key');
+      throw SwapErrorFactory.createPrivateKeyDecryptError();
     }
     
     return privateKey;
-  } catch (error) {
-    // Re-throw authentication and validation errors
-    if (error instanceof Error) {
+  } catch (error: any) {
+    // If it's already a SwapError, re-throw it
+    if (error.code) {
       throw error;
     }
     
     // Handle unexpected errors
-    throw new Error('Failed to decrypt private key');
+    throw SwapErrorFactory.createPrivateKeyDecryptError(error);
   }
 }
 

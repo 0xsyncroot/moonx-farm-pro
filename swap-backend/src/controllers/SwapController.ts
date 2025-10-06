@@ -15,28 +15,6 @@ export class SwapController {
     await this.swapService.cleanup();
   }
 
-  // Get supported networks
-  async getNetworks(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      // Remove RPC information from networks before sending to client
-      const networks = Object.values(NETWORKS).map(network => {
-        const { rpc, ...networkWithoutRpc } = network;
-        return networkWithoutRpc;
-      });
-
-      return reply.send({ 
-        success: true, 
-        data: { networks } 
-      });
-    } catch (error) {
-      console.error('Error in getNetworks:', error);
-      return reply.code(500).send({ 
-        success: false, 
-        error: 'Internal server error' 
-      });
-    }
-  }
-
   // Get tokens with balances
   async getTokens(
     request: FastifyRequest<{

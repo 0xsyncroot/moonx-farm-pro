@@ -1,0 +1,53 @@
+# MoonX Farm Router - Multiple Upgrades Configuration Example
+# Copy this to .env and modify as needed for multiple upgrades
+
+# ========================
+# BASIC CONFIGURATION
+# ========================
+NETWORK=base
+DIAMOND_ADDRESS=0x1234567890123456789012345678901234567890
+PRIVATE_KEY=your_private_key_here
+FEE_RECIPIENT=0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+
+# ========================
+# MULTIPLE UPGRADES CONFIGURATION
+# ========================
+
+# Option 1: Dynamic salt for multiple upgrades (RECOMMENDED)
+# Each upgrade will generate a new unique address
+USE_DYNAMIC_SALT=true
+
+# Option 2: Custom salt with versioning
+# Uncomment and modify for each upgrade version
+# UPGRADE_SALT=MoonXFarmRouter.v2.0.0
+# UPGRADE_SALT=MoonXFarmRouter.v2.1.0
+# UPGRADE_SALT=MoonXFarmRouter.v3.0.0
+
+# Option 3: Deterministic salt (DEFAULT - only for first deployment)
+# USE_DYNAMIC_SALT=false
+
+# ========================
+# API KEYS
+# ========================
+BASESCAN_API_KEY=your_basescan_api_key_here
+
+# ========================
+# UPGRADE WORKFLOW EXAMPLE
+# ========================
+
+# First upgrade: USE_DYNAMIC_SALT=true
+# Second upgrade: USE_DYNAMIC_SALT=true  
+# Third upgrade: USE_DYNAMIC_SALT=true
+# 
+# OR use versioned custom salts:
+# First upgrade: UPGRADE_SALT=MoonXFarmRouter.v2.0.0
+# Second upgrade: UPGRADE_SALT=MoonXFarmRouter.v2.1.0
+# Third upgrade: UPGRADE_SALT=MoonXFarmRouter.v3.0.0
+
+# ========================
+# IMPORTANT NOTES
+# ========================
+# - Diamond address NEVER changes during upgrades
+# - Only MoonXFacet address changes with each upgrade
+# - No need to remove old facet deployments manually
+# - Script handles all facet management automatically

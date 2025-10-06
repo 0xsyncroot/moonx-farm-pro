@@ -1,7 +1,47 @@
 import { ethers } from 'ethers';
+import type { Network } from '@/types/api';
 
-// MoonX Contract Configuration
-export const MOONX_CONTRACT_ADDRESS = '0xd8b3479C0815D0FFf94343282FC9f34C5e8E7630';
+// Get MoonX contract address from network object
+export const getMoonXContractAddress = (network: Network): string => {
+  if (!network.moonxContractAddress) {
+    console.error(`🚨 MoonX contract address not configured for network ${network.name} (chain ${network.chainId})`);
+    throw new Error(`MoonX contract address not configured for network ${network.name} (chain ${network.chainId})`);
+  }
+  
+  console.log(`🔗 Using MoonX contract ${network.moonxContractAddress} for chain ${network.chainId} (${network.name})`);
+  return network.moonxContractAddress;
+};
+
+// Get MoonX contract address by chain ID from networks array
+export const getMoonXContractAddressByChainId = (chainId: number, networks: Network[]): string => {
+  const network = networks.find(n => n.chainId === chainId);
+  
+  if (!network) {
+    const supportedChains = networks.map(n => n.chainId).join(', ');
+    console.error(`🚨 Network not found for chain ${chainId}. Available networks: ${supportedChains}`);
+    throw new Error(`Network not found for chain ${chainId}. Available networks: ${supportedChains}`);
+  }
+  
+  return getMoonXContractAddress(network);
+};
+
+// Get all supported chain IDs from networks array
+export const getSupportedChainIds = (networks: Network[]): number[] => {
+  return networks
+    .filter(n => n.moonxContractAddress) // Only networks with MoonX contract
+    .map(n => n.chainId);
+};
+
+// Check if network supports MoonX
+export const isNetworkSupported = (network: Network): boolean => {
+  return !!network.moonxContractAddress;
+};
+
+// Check if chain is supported by checking networks array
+export const isChainSupported = (chainId: number, networks: Network[]): boolean => {
+  const network = networks.find(n => n.chainId === chainId);
+  return network ? isNetworkSupported(network) : false;
+};
 
 export const MOONX_ABI = [
   "function execMoonXSwap(bytes[] calldata args) external payable returns (uint256)",
@@ -31,10 +71,13 @@ export interface SwapParams {
 export class MoonXService {
   private contract: ethers.Contract;
   private signer: ethers.Signer;
+  private network: Network;
 
-  constructor(provider: ethers.Provider, signer: ethers.Signer) {
+  constructor(provider: ethers.Provider, signer: ethers.Signer, network: Network) {
     this.signer = signer;
-    this.contract = new ethers.Contract(MOONX_CONTRACT_ADDRESS, MOONX_ABI, signer);
+    this.network = network;
+    const contractAddress = getMoonXContractAddress(network);
+    this.contract = new ethers.Contract(contractAddress, MOONX_ABI, signer);
   }
 
   // Helper function cho referral data
@@ -156,7 +199,8 @@ export class MoonXService {
       this.signer
     );
 
-    return await tokenContract.allowance(ownerAddress, MOONX_CONTRACT_ADDRESS);
+    const contractAddress = getMoonXContractAddress(this.network);
+    return await tokenContract.allowance(ownerAddress, contractAddress);
   }
 
   // Approve token
@@ -171,7 +215,8 @@ export class MoonXService {
       this.signer
     );
 
-    return await tokenContract.approve(MOONX_CONTRACT_ADDRESS, amount);
+    const contractAddress = getMoonXContractAddress(this.network);
+    return await tokenContract.approve(contractAddress, amount);
   }
 
   // Debug quote
